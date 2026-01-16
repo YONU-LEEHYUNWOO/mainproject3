@@ -1,6 +1,6 @@
 import React from 'react';
-import { handleDateClick } from '../handlers/scheduleHandlers';
-import { isTaskCompleted } from '../utils/dateFormat';
+import { handleDateClick } from '../../../handlers/scheduleHandlers';
+import { isTaskCompleted } from '../../../utils/dateFormat';
 
 /**
  * 달력 뷰 컴포넌트

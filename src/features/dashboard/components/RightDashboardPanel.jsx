@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutDashboard } from 'lucide-react';
-import CalendarView from '../../../components/CalendarView';
+import CalendarView from '../../schedule/components/CalendarView';
 import ScheduleList from '../../../components/ScheduleList';
 
 // 데스크톱 우측 대시보드 패널
