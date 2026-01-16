@@ -223,19 +223,31 @@ export const analyzeAndNotifyNewTask = async (
             notificationContent += `검색 키워드로 찾기가 어려워요. 일정에서 수정해주세요!\n`;
         }
 
-        setChatHistory(prev => [...prev, {
-            role: 'assistant',
-            content: notificationContent,
-            timestamp: Date.now()
-        }]);
+        if (setChatHistory && typeof setChatHistory === 'function') {
+            try {
+                setChatHistory(prev => [...prev, {
+                    role: 'assistant',
+                    content: notificationContent,
+                    timestamp: Date.now()
+                }]);
+            } catch (error) {
+                console.warn('setChatHistory 호출 실패 (무시됨):', error);
+            }
+        }
 
     } catch (error) {
         console.error('❌ 일정 분석 실패:', error);
         // 분석 실패해도 기본 안내 메시지 추가
-        setChatHistory(prev => [...prev, {
-            role: 'assistant',
-            content: `📅 "${task.title}" 일정이 추가되었어요. ${task.date} ${task.time || ''}에 ${task.location || '예정된 장소'}로 가시면 돼요.`,
-            timestamp: Date.now()
-        }]);
+        if (setChatHistory && typeof setChatHistory === 'function') {
+            try {
+                setChatHistory(prev => [...prev, {
+                    role: 'assistant',
+                    content: `📅 "${task.title}" 일정이 추가되었어요. ${task.date} ${task.time || ''}에 ${task.location || '예정된 장소'}로 가시면 돼요.`,
+                    timestamp: Date.now()
+                }]);
+            } catch (err) {
+                console.warn('setChatHistory 호출 실패 (무시됨):', err);
+            }
+        }
     }
 };

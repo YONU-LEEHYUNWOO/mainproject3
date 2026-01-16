@@ -55,11 +55,24 @@ const CalendarView = ({
                 {calendarDays.map((day, i) => {
                     if (day === null) return <div key={`empty-start-${i}`} />;
                     const ds = `${calendarData.year}-${String(calendarData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const tasksForDay = confirmedTasks.filter(t =>
-                        t.date === ds && !isTaskCompleted(t.date, t.time, t.completed)
+                    
+                    // 해당 날짜의 모든 일정 가져오기
+                    const allTasksForDay = confirmedTasks.filter(t => t.date === ds);
+                    
+                    // 완료되지 않은 일정 (남은 일정)
+                    const remainingTasks = allTasksForDay.filter(t => 
+                        !isTaskCompleted(t.date, t.time, t.completed)
                     );
-                    const task = tasksForDay[0];
+                    
+                    // 완료된 일정
+                    const completedTasks = allTasksForDay.filter(t => 
+                        isTaskCompleted(t.date, t.time, t.completed)
+                    );
+                    
+                    const task = remainingTasks[0] || completedTasks[0]; // 남은 일정 우선, 없으면 완료된 일정
                     const isSelected = selectedTaskId === task?.id;
+                    const hasRemainingTasks = remainingTasks.length > 0;
+                    const hasCompletedTasks = completedTasks.length > 0;
 
                     const today = new Date();
                     const isToday = today.getFullYear() === calendarData.year &&
@@ -78,7 +91,25 @@ const CalendarView = ({
                                 }`}
                         >
                             {day}
-                            {task && <div className={`w-1 h-1 rounded-full mt-0.5 mx-auto ${isSelected ? 'bg-white' : 'bg-pastel-purple'}`} />}
+                            {/* 일정 표시: 남은 일정은 보라색, 완료된 일정은 회색 */}
+                            {hasRemainingTasks && (
+                                <div className={`w-1.5 h-1.5 rounded-full mt-0.5 mx-auto ${isSelected ? 'bg-white' : 'bg-pastel-purple'}`} />
+                            )}
+                            {!hasRemainingTasks && hasCompletedTasks && (
+                                <div className={`w-1.5 h-1.5 rounded-full mt-0.5 mx-auto ${isSelected ? 'bg-white/50' : 'bg-slate-300'}`} />
+                            )}
+                            {/* 여러 일정이 있을 경우 숫자 표시 */}
+                            {allTasksForDay.length > 1 && (
+                                <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full text-[8px] flex items-center justify-center ${
+                                    isSelected 
+                                        ? 'bg-white text-pastel-purple' 
+                                        : hasRemainingTasks 
+                                            ? 'bg-pastel-purple text-white' 
+                                            : 'bg-slate-300 text-slate-600'
+                                }`}>
+                                    {allTasksForDay.length}
+                                </div>
+                            )}
                         </button>
                     );
                 })}

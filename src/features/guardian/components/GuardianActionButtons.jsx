@@ -1,35 +1,29 @@
 import React from 'react';
-import { MessageCircle, Send, Activity, Utensils, ShoppingCart, Calendar, Plus, FileText, Settings } from 'lucide-react';
+import { MessageCircle, Activity, Utensils, ShoppingCart } from 'lucide-react';
 import { t } from '../../../i18n';
 
 /**
- * 보호자 액션 버튼 모음 (메시지, 일정, 리포트 등)
+ * 보호자 액션 버튼 모음 (부모님께 보낼 간단한 메시지)
+ * - AI 채팅, 일정 관리, 안심 리포트, 보호자 설정은 GuardianTopActions로 이동됨
  */
-const GuardianActionButtons = ({ 
-    language, 
-    setShowMessageModal, 
-    setShowScheduleModal, 
-    setShowReportModal, 
-    setShowGuardianSettingsModal,
-    onMessageSend 
+const GuardianActionButtons = ({
+    language,
+    onMessageSend
 }) => {
     return (
         <div className="space-y-6">
-            {/* 1. 메시지/지시 전송 섹션 */}
+            {/* 부모님께 보낼 간단한 메시지 섹션 */}
             <div className="bg-white rounded-3xl p-6 shadow-lg border border-pastel-pink/30">
-                <div className="flex items-center justify-between mb-6">
+                <div className="mb-6">
                     <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                         <MessageCircle size={20} className="text-pastel-pink" />
-                        {t('sendMessage', language)}
+                        부모님께 보낼 간단한 메시지
                     </h3>
-                    <button
-                        onClick={() => setShowMessageModal(true)}
-                        className="px-5 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-black text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2"
-                    >
-                        <Send size={16} />
-                        자유 메시지
-                    </button>
                 </div>
+                <p className="text-sm text-slate-600 mb-4">
+                    한 번의 클릭으로 부모님께 안부 메시지를 보낼 수 있습니다.<br/>
+                    산책, 식사, 장보기 등 일상적인 케어 메시지를 빠르게 전송하세요.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <button
                         onClick={() => onMessageSend && onMessageSend({ type: 'instruction', action: 'walk', text: t('walkRequest', language) })}
@@ -62,37 +56,6 @@ const GuardianActionButtons = ({
                         <p className="text-xs text-slate-500 font-bold">장보기 필요 확인</p>
                     </button>
                 </div>
-            </div>
-
-            {/* 2. 관리 도구 버튼 섹션 */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <button
-                    onClick={() => setShowScheduleModal(true)}
-                    className="flex flex-col items-center justify-center gap-3 p-6 bg-white border-2 border-slate-100 rounded-3xl shadow-sm hover:shadow-md hover:border-trustBlue/30 transition-all"
-                >
-                    <div className="w-12 h-12 bg-pastel-blue/20 rounded-2xl flex items-center justify-center">
-                        <Calendar size={24} className="text-trustBlue" />
-                    </div>
-                    <span className="font-black text-slate-700">일정 관리</span>
-                </button>
-                <button
-                    onClick={() => setShowReportModal(true)}
-                    className="flex flex-col items-center justify-center gap-3 p-6 bg-white border-2 border-slate-100 rounded-3xl shadow-sm hover:shadow-md hover:border-purple-300 transition-all"
-                >
-                    <div className="w-12 h-12 bg-pastel-purple/20 rounded-2xl flex items-center justify-center">
-                        <FileText size={24} className="text-purple-600" />
-                    </div>
-                    <span className="font-black text-slate-700">안심 리포트</span>
-                </button>
-                <button
-                    onClick={() => setShowGuardianSettingsModal(true)}
-                    className="flex flex-col items-center justify-center gap-3 p-6 bg-white border-2 border-slate-100 rounded-3xl shadow-sm hover:shadow-md hover:border-slate-300 transition-all col-span-2 md:col-span-1"
-                >
-                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center">
-                        <Settings size={24} className="text-slate-600" />
-                    </div>
-                    <span className="font-black text-slate-700">보호자 설정</span>
-                </button>
             </div>
         </div>
     );
