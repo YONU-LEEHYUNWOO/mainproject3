@@ -12,11 +12,13 @@ const AppViewSwitch = ({
     handleMessageReceive,
     dailyActivities,
     confirmedTasks,
+    setConfirmedTasks,
     locationInfo,
     setLocationInfo,
     currentGPSLocation,
     setCurrentGPSLocation,
     chatHistory,
+    setChatHistory,
     reportSettings,
     setReportSettings,
     guardians,
@@ -42,11 +44,13 @@ const AppViewSwitch = ({
                 handleMessageReceive={handleMessageReceive}
                 dailyActivities={dailyActivities}
                 confirmedTasks={confirmedTasks}
+                setConfirmedTasks={setConfirmedTasks}
                 locationInfo={locationInfo}
                 setLocationInfo={setLocationInfo}
                 currentGPSLocation={currentGPSLocation}
                 setCurrentGPSLocation={setCurrentGPSLocation}
                 chatHistory={chatHistory}
+                setChatHistory={setChatHistory}
                 reportSettings={reportSettings}
                 setReportSettings={setReportSettings}
                 guardians={guardians}

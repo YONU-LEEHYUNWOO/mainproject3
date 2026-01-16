@@ -37,14 +37,18 @@ export const handleDateClick = (
     if (selectedDate === dateStr) {
         // 같은 날짜를 다시 클릭하면 선택 해제 (오늘로 리셋)
         setSelectedDate(null);
-        setSelectedTaskId(null);
+        if (setSelectedTaskId && typeof setSelectedTaskId === 'function') {
+            setSelectedTaskId(null);
+        }
     } else {
         // 다른 날짜를 클릭하면 해당 날짜 선택
         setSelectedDate(dateStr);
         
         const existing = confirmedTasks.find(t => t.date === dateStr);
         if (existing) {
-            setSelectedTaskId(existing.id);
+            if (setSelectedTaskId && typeof setSelectedTaskId === 'function') {
+                setSelectedTaskId(existing.id);
+            }
         } else {
             // 해당 날짜에 일정이 없으면 새 일정 생성
             const newTask = {
@@ -58,7 +62,9 @@ export const handleDateClick = (
                 analysis: { life: "분석을 위해 상세 내용을 입력하세요.", requirements: [], traffic: null }
             };
             setConfirmedTasks(prev => [...prev, newTask]);
-            setSelectedTaskId(newTask.id);
+            if (setSelectedTaskId && typeof setSelectedTaskId === 'function') {
+                setSelectedTaskId(newTask.id);
+            }
             setEditingTaskId(newTask.id);
             setTempTask({ ...newTask });
             // 일정 추가 시 장소 검색 상태 초기화
@@ -120,9 +126,18 @@ export const handleScheduleAdd = async (
     // 일정 추가 (자동 확인이면 바로 추가, 아니면 제안)
     if (autoConfirm) {
         // 자동으로 일정 추가
-        console.log('📅 자동 일정 추가:', newTask);
+        console.log('📅 [handleScheduleAdd] 자동 일정 추가 시작:', newTask);
+        console.log('📅 [handleScheduleAdd] setConfirmedTasks 타입:', typeof setConfirmedTasks);
+        console.log('📅 [handleScheduleAdd] 현재 confirmedTasks 개수:', confirmedTasks?.length || 0);
+
+        if (!setConfirmedTasks || typeof setConfirmedTasks !== 'function') {
+            console.error('❌ [handleScheduleAdd] setConfirmedTasks가 함수가 아닙니다!', setConfirmedTasks);
+            throw new Error('setConfirmedTasks가 함수가 아닙니다');
+        }
 
         setConfirmedTasks(prev => {
+            console.log('📅 [handleScheduleAdd] setConfirmedTasks 콜백 실행, 이전 일정 개수:', prev?.length || 0);
+            
             // 중복 체크
             const isDuplicate = prev.some(t =>
                 t.date === newTask.date &&
@@ -131,14 +146,19 @@ export const handleScheduleAdd = async (
             );
 
             if (isDuplicate) {
-                console.log('⚠️ 중복 일정 감지, 추가하지 않음:', newTask);
+                console.log('⚠️ [handleScheduleAdd] 중복 일정 감지, 추가하지 않음:', newTask);
                 return prev;
             }
 
-            return [...prev, newTask];
+            const updated = [...prev, newTask];
+            console.log('✅ [handleScheduleAdd] 일정 추가 완료, 새로운 일정 개수:', updated.length);
+            return updated;
         });
 
-        setSelectedTaskId(newTask.id);
+        // setSelectedTaskId가 함수인 경우에만 호출
+        if (setSelectedTaskId && typeof setSelectedTaskId === 'function') {
+            setSelectedTaskId(newTask.id);
+        }
 
         // 반복 일정인 경우 다음 12개 일정 생성
         if (schedule.repeat) {
@@ -158,23 +178,35 @@ export const handleScheduleAdd = async (
         analyzeAndNotifyNewTask(newTask, locationInfo, currentGPSLocation, setConfirmedTasks, setChatHistory);
 
         // 부모 앱 채팅에 일정 추가 알림
-        setChatHistory(prev => [...prev, {
-            role: 'assistant',
-            content: `📅 "${newTask.title}" 일정이 추가되었습니다.\n날짜: ${newTask.date}\n시간: ${newTask.time}${newTask.location ? `\n장소: ${newTask.location}` : ''}`,
-            timestamp: Date.now()
-        }]);
+        if (setChatHistory && typeof setChatHistory === 'function') {
+            try {
+                setChatHistory(prev => [...prev, {
+                    role: 'assistant',
+                    content: `📅 "${newTask.title}" 일정이 추가되었습니다.\n날짜: ${newTask.date}\n시간: ${newTask.time}${newTask.location ? `\n장소: ${newTask.location}` : ''}`,
+                    timestamp: Date.now()
+                }]);
+            } catch (error) {
+                console.warn('setChatHistory 호출 실패 (무시됨):', error);
+            }
+        }
     } else {
         // 부모 앱에서 사용자 확인 후 추가
-        setChatHistory(prev => [...prev, {
-            role: 'assistant',
-            type: 'proposal',
-            proposal: {
-                type: 'add',
-                question: `${newTask.date} ${newTask.time}에 "${newTask.title}" 일정을 등록할까요?`,
-                data: newTask
-            },
-            timestamp: Date.now()
-        }]);
+        if (setChatHistory && typeof setChatHistory === 'function') {
+            try {
+                setChatHistory(prev => [...prev, {
+                    role: 'assistant',
+                    type: 'proposal',
+                    proposal: {
+                        type: 'add',
+                        question: `${newTask.date} ${newTask.time}에 "${newTask.title}" 일정을 등록할까요?`,
+                        data: newTask
+                    },
+                    timestamp: Date.now()
+                }]);
+            } catch (error) {
+                console.warn('setChatHistory 호출 실패 (무시됨):', error);
+            }
+        }
     }
 };
 
@@ -229,7 +261,9 @@ export const confirmProposal = (
 export const deleteTask = (taskId, e, confirmedTasks, selectedTaskId, setConfirmedTasks, setSelectedTaskId) => {
     if (e) e.stopPropagation();
     setConfirmedTasks(prev => prev.filter(t => t.id !== taskId));
-    if (selectedTaskId === taskId) setSelectedTaskId(null);
+    if (selectedTaskId === taskId && setSelectedTaskId && typeof setSelectedTaskId === 'function') {
+        setSelectedTaskId(null);
+    }
 };
 
 /**

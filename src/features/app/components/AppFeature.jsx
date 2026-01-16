@@ -258,6 +258,9 @@ export default function AppFeature() {
             currentGPSLocation={currentGPSLocation}
             setCurrentGPSLocation={setCurrentGPSLocation}
             chatHistory={chatHistory}
+            setChatHistory={setChatHistory}
+            confirmedTasks={confirmedTasks}
+            setConfirmedTasks={setConfirmedTasks}
             reportSettings={reportSettings}
             setReportSettings={setReportSettings}
             guardians={guardians}

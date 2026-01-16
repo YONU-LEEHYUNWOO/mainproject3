@@ -13,11 +13,13 @@ const GuardianView = ({
     handleMessageReceive,
     dailyActivities,
     confirmedTasks,
+    setConfirmedTasks,
     locationInfo,
     setLocationInfo,
     currentGPSLocation,
     setCurrentGPSLocation,
     chatHistory,
+    setChatHistory,
     reportSettings,
     setReportSettings,
     guardians,
@@ -85,11 +87,13 @@ const GuardianView = ({
                 onMessageSend={handleMessageReceive}
                 dailyActivities={dailyActivities}
                 confirmedTasks={confirmedTasks}
+                setConfirmedTasks={setConfirmedTasks}
                 locationInfo={locationInfo}
                 setLocationInfo={setLocationInfo}
                 currentGPSLocation={currentGPSLocation}
                 setCurrentGPSLocation={setCurrentGPSLocation}
                 chatHistory={chatHistory}
+                setChatHistory={setChatHistory}
                 reportSettings={reportSettings}
                 onReportSettingsChange={setReportSettings}
                 guardians={guardians}
