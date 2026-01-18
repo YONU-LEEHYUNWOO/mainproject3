@@ -704,6 +704,85 @@ export const getUnreadNotificationCount = () => {
     return notifications.filter(n => !n.read).length;
 };
 
+// storage 객체 (확장 메서드 포함)
+const STORAGE_EXT_KEYS = {
+  USER_DATA: 'carelink_user_data',
+  SCHEDULES: 'carelink_schedules',
+  FAMILY_LINK: 'carelink_family_link'
+}
+
+export const storage = {
+  // 기존 메서드들
+  saveTasks,
+  loadTasks,
+  saveChatHistory,
+  loadChatHistory,
+  saveDailyActivities,
+  loadDailyActivities,
+  saveGuardianStatus,
+  loadGuardianStatus,
+  saveRestMode,
+  loadRestMode,
+  saveLastActivityTime,
+  loadLastActivityTime,
+  saveMorningCareShown,
+  loadMorningCareShown,
+  saveLastMorningCareDate,
+  loadLastMorningCareDate,
+  saveDailySummaryShown,
+  loadDailySummaryShown,
+  saveLastSuggestionHour,
+  loadLastSuggestionHour,
+  saveLocationInfo,
+  loadLocationInfo,
+  saveBedtimeSettings,
+  loadBedtimeSettings,
+  saveActivitiesHistory,
+  loadActivitiesHistory,
+  addTodayToHistory,
+  saveGuardians,
+  loadGuardians,
+  addGuardian,
+  removeGuardian,
+  saveReportSettings,
+  loadReportSettings,
+  saveReports,
+  loadReports,
+  addReport,
+  saveGuardianContactAuth,
+  loadGuardianContactAuth,
+  generateVerificationCode,
+  saveInactivitySettings,
+  loadInactivitySettings,
+  saveMedicineAlarms,
+  loadMedicineAlarms,
+  addMedicineAlarm,
+  removeMedicineAlarm,
+  saveAccessibilitySettings,
+  loadAccessibilitySettings,
+  saveBehaviorPatterns,
+  loadBehaviorPatterns,
+  addBehaviorPattern,
+  saveNotifications,
+  loadNotifications,
+  addNotification,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  removeNotification,
+  getUnreadNotificationCount,
+  clearAllStorage,
+  saveConsentStatus,
+  loadConsentStatus,
+  
+  // 확장 메서드들
+  getUserData: () => loadFromStorage(STORAGE_EXT_KEYS.USER_DATA, null),
+  setUserData: (userData) => saveToStorage(STORAGE_EXT_KEYS.USER_DATA, userData),
+  getSchedules: () => loadFromStorage(STORAGE_EXT_KEYS.SCHEDULES, []),
+  setSchedules: (schedules) => saveToStorage(STORAGE_EXT_KEYS.SCHEDULES, schedules),
+  getFamilyLink: () => loadFromStorage(STORAGE_EXT_KEYS.FAMILY_LINK, null),
+  setFamilyLink: (familyLink) => saveToStorage(STORAGE_EXT_KEYS.FAMILY_LINK, familyLink)
+}
+
 export default {
     saveTasks,
     loadTasks,

@@ -1,4 +1,5 @@
 import { isTaskCompleted, formatDateTimeShort } from '../utils/dateFormat';
+import { storage } from '../utils/storage';
 
 /**
  * 일정 쿼리 처리 함수
@@ -251,3 +252,57 @@ export const analyzeAndNotifyNewTask = async (
         }
     }
 };
+
+// 일정 생성 (구조화된 데이터로 생성)
+export const createSchedule = (scheduleData, seniorId, createdBy = 'senior') => {
+  const schedule = {
+    id: Date.now(),
+    seniorId: seniorId,
+    createdBy: createdBy,
+    title: scheduleData.title || '일정',
+    dateTime: scheduleData.dateTime || new Date().toISOString(),
+    place: scheduleData.place || '',
+    memo: scheduleData.memo || '',
+    checklist: {
+      insuranceCard: false,
+      prescription: false,
+      companion: false
+    },
+    notificationSent: {
+      dMinus1: false,
+      threeHoursBefore: false,
+      thirtyMinutesBefore: false
+    },
+    createdAt: new Date().toISOString()
+  }
+
+  const schedules = storage.getSchedules()
+  schedules.push(schedule)
+  storage.setSchedules(schedules)
+
+  return schedule
+}
+
+// 일정 조회
+export const getSchedules = (seniorId = null) => {
+  const schedules = storage.getSchedules()
+  if (seniorId) {
+    return schedules.filter(s => s.seniorId === seniorId).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime))
+  }
+  return schedules.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime))
+}
+
+// 오늘 일정 조회
+export const getTodaySchedules = (seniorId) => {
+  const schedules = getSchedules(seniorId)
+  const today = new Date().toISOString().split('T')[0]
+  return schedules.filter(s => s.dateTime.startsWith(today))
+}
+
+// 일정 삭제
+export const deleteSchedule = (scheduleId) => {
+  const schedules = storage.getSchedules()
+  const filtered = schedules.filter(s => s.id !== scheduleId)
+  storage.setSchedules(filtered)
+  return true
+}
