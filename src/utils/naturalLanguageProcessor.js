@@ -1,3 +1,4 @@
+src/utils/naturalLanguageProcessor.js
 /**
  * 자연어 처리 유틸리티
  * 보호자 앱에서 자연어 명령을 파싱하여 일정, 위치, 행동 패턴 추출
