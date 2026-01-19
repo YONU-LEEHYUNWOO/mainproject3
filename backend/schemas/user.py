@@ -13,6 +13,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
+    user_type: str = Field('parent', pattern='^(parent|child)$')  # 'parent' or 'child'
     is_active: bool = True
 
 class UserCreate(UserBase):

@@ -10,6 +10,7 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 
 from .database import get_db
@@ -33,12 +34,36 @@ class TokenData(BaseModel):
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """비밀번호 검증 (bcrypt 72바이트 제한 고려)"""
-    # 긴 패스워드는 SHA256으로 먼저 해시한 후 검증
-    password_bytes = plain_password.encode('utf-8')
-    if len(password_bytes) > 72:
-        import hashlib
-        plain_password = hashlib.sha256(password_bytes).hexdigest()
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        # bcrypt를 직접 사용하여 호환성 문제 해결
+        import bcrypt
+        
+        # 긴 패스워드는 SHA256으로 먼저 해시한 후 검증
+        password_bytes = plain_password.encode('utf-8')
+        password_to_check = plain_password
+        if len(password_bytes) > 72:
+            import hashlib
+            password_to_check = hashlib.sha256(password_bytes).hexdigest()
+        
+        # bcrypt 직접 사용
+        try:
+            result = bcrypt.checkpw(
+                password_to_check.encode('utf-8'),
+                hashed_password.encode('utf-8')
+            )
+            print(f"AUTH DEBUG: 비밀번호 검증 결과 (bcrypt 직접) - {result}")
+            return result
+        except (ValueError, TypeError) as e:
+            # passlib을 fallback으로 사용
+            print(f"AUTH DEBUG: bcrypt 직접 사용 실패, passlib 사용 - {e}")
+            result = pwd_context.verify(password_to_check, hashed_password)
+            print(f"AUTH DEBUG: 비밀번호 검증 결과 (passlib) - {result}")
+            return result
+    except Exception as e:
+        print(f"AUTH ERROR: 비밀번호 검증 중 오류 - {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def get_password_hash(password: str) -> str:
     """비밀번호 해시 생성 (bcrypt 72바이트 제한 고려)"""
@@ -115,28 +140,105 @@ async def get_current_superuser(current_user: User = Depends(get_current_user)):
 
 def authenticate_user(db: Session, username: str, password: str):
     """사용자 인증"""
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
+    try:
+        print(f"AUTH DEBUG: 사용자 조회 시작 - username={username}")
+        user = db.query(User).filter(User.username == username).first()
+        print(f"AUTH DEBUG: 사용자 조회 결과 - user={user}")
+        
+        if not user:
+            print(f"AUTH DEBUG: 사용자를 찾을 수 없음")
+            return False
+        
+        print(f"AUTH DEBUG: 비밀번호 검증 시작")
+        if not verify_password(password, user.hashed_password):
+            print(f"AUTH DEBUG: 비밀번호 불일치")
+            return False
+        
+        print(f"AUTH DEBUG: 인증 성공 - user_id={user.id}")
+        return user
+    except Exception as e:
+        print(f"AUTH ERROR: 인증 중 오류 발생 - {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def register_user(db: Session, username: str, email: str, password: str, **kwargs):
     """새 사용자 등록"""
+    print(f"REGISTER: register_user 함수 시작 - username={username}")
+    
+    # get_db()에서 이미 테이블을 확인하고 생성하므로 여기서는 바로 쿼리 진행
+    
     # 중복 사용자명 확인
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="이미 사용중인 사용자명입니다"
-        )
+    try:
+        existing_user = db.query(User).filter(User.username == username).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이미 사용중인 사용자명입니다"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "no such table" in error_msg:
+            print(f"REGISTER ERROR: {e}")
+            print("REGISTER: Attempting to create table directly in session...")
+            # 세션에서 직접 테이블 생성 시도
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username VARCHAR(50) NOT NULL UNIQUE,
+                        email VARCHAR(100) NOT NULL UNIQUE,
+                        hashed_password VARCHAR(255) NOT NULL,
+                        full_name VARCHAR(100),
+                        phone VARCHAR(20),
+                        user_type VARCHAR(20) NOT NULL DEFAULT 'parent',
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        is_superuser BOOLEAN NOT NULL DEFAULT 0,
+                        last_login DATETIME,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.commit()
+                print("REGISTER SUCCESS: Table created via session!")
+                # 다시 시도
+                existing_user = db.query(User).filter(User.username == username).first()
+                if existing_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="이미 사용중인 사용자명입니다"
+                    )
+            except Exception as create_error:
+                print(f"REGISTER ERROR creating table: {create_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"데이터베이스 테이블 생성 실패: {str(create_error)}"
+                )
+        else:
+            raise
 
     # 중복 이메일 확인
-    if db.query(User).filter(User.email == email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="이미 사용중인 이메일입니다"
-        )
+    try:
+        existing_email = db.query(User).filter(User.email == email).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이미 사용중인 이메일입니다"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "no such table" in error_msg:
+            print(f"REGISTER ERROR during email check: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"데이터베이스 오류: {str(e)}"
+            )
+        else:
+            raise
 
     # 비밀번호 해싱
     hashed_password = get_password_hash(password)

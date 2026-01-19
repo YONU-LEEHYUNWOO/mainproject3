@@ -11,6 +11,7 @@ from .ai_conversation import AIConversation
 from .guardian import Guardian
 from .medicine import Medicine
 from .medicine_alarm import MedicineAlarm
+from .notification_log import NotificationLog
 
 # 모든 모델을 __all__에 명시
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "AIConversation",
     "Guardian",
     "Medicine",
-    "MedicineAlarm"
+    "MedicineAlarm",
+    "NotificationLog"
 ]

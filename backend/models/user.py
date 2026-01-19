@@ -17,18 +17,20 @@ class User(BaseModel):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
     phone = Column(String(20), nullable=True)
+    user_type = Column(String(20), nullable=False, default='parent')  # 'parent' or 'child'
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     last_login = Column(DateTime, nullable=True)
 
     # 관계 설정 (lazy loading으로 성능 최적화)
-    tasks = relationship("Task", back_populates="owner", lazy="dynamic")
-    chat_messages = relationship("ChatMessage", back_populates="user", lazy="dynamic")
-    ai_conversations = relationship("AIConversation", back_populates="user", lazy="dynamic")
-    guardians = relationship("Guardian", back_populates="user", lazy="dynamic")
-    medicines = relationship("Medicine", back_populates="owner", lazy="dynamic")
-    medicine_alarms = relationship("MedicineAlarm", back_populates="user", lazy="dynamic")
-    notification_logs = relationship("NotificationLog", back_populates="user", lazy="dynamic")
+    # 로그인 시 관계 로드 문제를 방지하기 위해 lazy="select" 사용
+    tasks = relationship("Task", back_populates="owner", lazy="select")
+    chat_messages = relationship("ChatMessage", back_populates="user", lazy="select")
+    ai_conversations = relationship("AIConversation", back_populates="user", lazy="select")
+    guardians = relationship("Guardian", back_populates="user", lazy="select")
+    medicines = relationship("Medicine", back_populates="owner", lazy="select")
+    medicine_alarms = relationship("MedicineAlarm", back_populates="user", lazy="select")
+    notification_logs = relationship("NotificationLog", back_populates="user", lazy="select")
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"

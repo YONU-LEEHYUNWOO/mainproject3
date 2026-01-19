@@ -30,7 +30,7 @@ async def get_medicine_alarms(
     """
     alarms = db.query(MedicineAlarm).filter(MedicineAlarm.user_id == current_user.id).all()
     return MedicineAlarmListResponse(
-        alarms=[MedicineAlarmResponse.from_orm(alarm) for alarm in alarms],
+        alarms=[MedicineAlarmResponse.model_validate(alarm) for alarm in alarms],
         total=len(alarms)
     )
 
@@ -51,7 +51,7 @@ async def create_medicine_alarm(
         )
 
     db_alarm = MedicineAlarm(
-        **alarm.dict(),
+        **alarm.model_dump(),
         user_id=current_user.id
     )
 
@@ -61,7 +61,7 @@ async def create_medicine_alarm(
     db.add(db_alarm)
     db.commit()
     db.refresh(db_alarm)
-    return MedicineAlarmResponse.from_orm(db_alarm)
+    return MedicineAlarmResponse.model_validate(db_alarm)
 
 @router.get("/alarms/{alarm_id}", response_model=MedicineAlarmResponse)
 async def get_medicine_alarm(
@@ -83,7 +83,7 @@ async def get_medicine_alarm(
             detail="약 알림을 찾을 수 없습니다"
         )
 
-    return MedicineAlarmResponse.from_orm(alarm)
+    return MedicineAlarmResponse.model_validate(alarm)
 
 @router.put("/alarms/{alarm_id}", response_model=MedicineAlarmResponse)
 async def update_medicine_alarm(
@@ -122,7 +122,7 @@ async def update_medicine_alarm(
             )
 
     # 업데이트할 필드만 적용
-    update_data = alarm_update.dict(exclude_unset=True)
+    update_data = alarm_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(alarm, field, value)
 
@@ -131,7 +131,7 @@ async def update_medicine_alarm(
 
     db.commit()
     db.refresh(alarm)
-    return MedicineAlarmResponse.from_orm(alarm)
+    return MedicineAlarmResponse.model_validate(alarm)
 
 @router.delete("/alarms/{alarm_id}")
 async def delete_medicine_alarm(
@@ -204,11 +204,12 @@ async def get_today_medicine_alarms(
     """
     today = date.today()
 
+    from sqlalchemy import or_
     alarms = db.query(MedicineAlarm).filter(
         MedicineAlarm.user_id == current_user.id,
         MedicineAlarm.is_active == True,
         MedicineAlarm.start_date <= today,
-        MedicineAlarm.end_date >= today
+        or_(MedicineAlarm.end_date >= today, MedicineAlarm.end_date.is_(None))
     ).all()
 
     today_alarms = []
@@ -299,4 +300,4 @@ async def toggle_medicine_alarm(
     db.commit()
     db.refresh(alarm)
 
-    return MedicineAlarmResponse.from_orm(alarm)
+    return MedicineAlarmResponse.model_validate(alarm)

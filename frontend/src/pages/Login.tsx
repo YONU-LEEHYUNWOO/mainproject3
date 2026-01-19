@@ -4,12 +4,14 @@ import { useAuth } from '../contexts/AuthContext'
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true)
+  const [selectedMode, setSelectedMode] = useState<'parent' | 'child'>('parent') // 로그인 시 선택할 모드
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
     full_name: '',
-    phone: ''
+    phone: '',
+    user_type: 'parent' // 회원가입 시 기본값은 부모 모드
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -32,7 +34,9 @@ const Login = () => {
     try {
       if (isLogin) {
         await login(formData.username, formData.password)
-        navigate('/')
+        // 선택한 모드로 이동
+        localStorage.setItem('userMode', selectedMode)
+        navigate(selectedMode === 'parent' ? '/parent/dashboard' : '/child/dashboard')
       } else {
         await register({
           username: formData.username,
@@ -41,7 +45,7 @@ const Login = () => {
           full_name: formData.full_name || undefined,
           phone: formData.phone || undefined
         })
-        navigate('/')
+        navigate('/mode-select')
       }
     } catch (error: any) {
       // Pydantic validation 에러 처리
@@ -164,6 +168,43 @@ const Login = () => {
               />
             </div>
           </div>
+
+          {/* 로그인 시 모드 선택 */}
+          {isLogin && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 text-center">
+                사용 모드를 선택하세요
+              </label>
+              <div className="flex gap-4 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMode('parent')}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                    selectedMode === 'parent'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">👴</div>
+                  <div className="text-sm font-medium">부모 모드</div>
+                  <div className="text-xs text-gray-500 mt-1">일상 케어</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMode('child')}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                    selectedMode === 'child'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">👨</div>
+                  <div className="text-sm font-medium">자식 모드</div>
+                  <div className="text-xs text-gray-500 mt-1">부모님 관리</div>
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="text-red-600 text-sm text-center">

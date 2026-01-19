@@ -9,7 +9,8 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // 쿠키/인증 정보 포함
+  withCredentials: false, // CORS 문제 해결을 위해 일단 false로 설정
+  timeout: 10000, // 10초 타임아웃 추가
 })
 
 // 요청 인터셉터: 인증 토큰 추가
@@ -32,11 +33,35 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
+    // 타임아웃 오류 처리
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      console.error('요청 타임아웃:', error)
+      return Promise.reject(new Error('서버 응답 시간이 초과되었습니다. 다시 시도해주세요.'))
+    }
+    
+    // 네트워크 오류 처리
+    if (!error.response) {
+      console.error('네트워크 오류:', error)
+      if (error.message.includes('Network Error') || error.message.includes('Failed to fetch')) {
+        return Promise.reject(new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.'))
+      }
+      return Promise.reject(new Error('네트워크 오류가 발생했습니다.'))
+    }
+    
     if (error.response?.status === 401) {
       // 인증 오류 시 토큰 제거 및 로그인 페이지로 리다이렉트
       localStorage.removeItem('auth_token')
       window.location.href = '/login'
     }
+    
+    // 상세한 오류 메시지 전달
+    const errorMessage = error.response?.data?.detail || error.message || '알 수 없는 오류가 발생했습니다.'
+    console.error('API 오류:', {
+      status: error.response?.status,
+      message: errorMessage,
+      data: error.response?.data
+    })
+    
     return Promise.reject(error)
   }
 )

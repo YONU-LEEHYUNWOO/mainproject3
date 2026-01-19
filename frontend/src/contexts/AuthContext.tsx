@@ -51,30 +51,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // validateToken 함수를 useCallback으로 메모이제이션
+  const validateToken = React.useCallback(async (authToken: string) => {
+    try {
+      const response = await authAPI.getMe(authToken)
+      setUser(response.data)
+    } catch (error) {
+      // 토큰이 유효하지 않으면 제거
+      console.warn('Token validation failed:', error)
+      localStorage.removeItem('auth_token')
+      setToken(null)
+      setUser(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
   // 앱 시작 시 로컬 스토리지에서 토큰 복원
   useEffect(() => {
     const storedToken = localStorage.getItem('auth_token')
     if (storedToken) {
       setToken(storedToken)
       // 토큰 유효성 검증 및 사용자 정보 로드
-      validateToken(storedToken)
+      validateToken(storedToken).catch(() => {
+        // 오류 발생 시에도 로딩 상태 해제
+        setIsLoading(false)
+      })
     } else {
       setIsLoading(false)
     }
-  }, [])
-
-  const validateToken = async (authToken: string) => {
-    try {
-      const response = await authAPI.getMe(authToken)
-      setUser(response.data)
-    } catch (error) {
-      // 토큰이 유효하지 않으면 제거
-      localStorage.removeItem('auth_token')
-      setToken(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  }, [validateToken])
 
   const login = async (username: string, password: string) => {
     try {

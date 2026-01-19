@@ -23,7 +23,7 @@ class Medicine(BaseModel):
 
     # 관계 설정
     owner = relationship("User", back_populates="medicines")
-    alarms = relationship("MedicineAlarm", back_populates="medicine", cascade="all, delete-orphan")
+    # MedicineAlarm은 독립적인 모델이므로 관계 제거
 
     def __repr__(self):
         return f"<Medicine(id={self.id}, name={self.name}, frequency={self.frequency})>"

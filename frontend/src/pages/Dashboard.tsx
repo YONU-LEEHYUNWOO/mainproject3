@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { tasksAPI, medicineAPI } from '../services/api'
 import {
@@ -24,6 +24,10 @@ interface DashboardStats {
 
 const Dashboard = () => {
   const { user } = useAuth()
+  const location = useLocation()
+  // 경로에서 모드 추출 (/parent/... 또는 /child/...)
+  const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
+  
   const [stats, setStats] = useState<DashboardStats>({
     todayTasks: { total: 0, completed: 0, remaining: 0 },
     todayMedicines: [],
@@ -108,14 +112,18 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* 환영 메시지 */}
+      {/* 환영 메시지 - 모드별로 다른 메시지 */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
           <h1 className="text-2xl font-bold text-gray-900">
-            안녕하세요, {user?.full_name || user?.username}님!
+            {mode === 'parent' 
+              ? `안녕하세요, ${user?.full_name || user?.username}님! 👴`
+              : `부모님 관리 대시보드 👨`}
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            AI 케어비서가 당신의 건강과 일상을 도와드립니다.
+            {mode === 'parent'
+              ? 'AI 케어비서가 당신의 건강과 일상을 도와드립니다.'
+              : '부모님의 건강과 일상을 모니터링하고 관리하세요.'}
           </p>
         </div>
       </div>
@@ -127,7 +135,7 @@ const Dashboard = () => {
           value={stats.todayTasks.total}
           icon={Calendar}
           color="bg-blue-500"
-          link="/tasks"
+          link={mode === 'parent' ? '/parent/tasks' : '/child/tasks'}
           subtitle={`${stats.todayTasks.completed}개 완료`}
         />
 
@@ -136,7 +144,7 @@ const Dashboard = () => {
           value={stats.todayMedicines.length}
           icon={Pill}
           color="bg-green-500"
-          link="/medicine"
+          link={mode === 'parent' ? '/parent/medicine' : '/child/medicine'}
           subtitle="오늘 복용할 약"
         />
 
@@ -145,16 +153,27 @@ const Dashboard = () => {
           value="대화하기"
           icon={MessageSquare}
           color="bg-purple-500"
-          link="/chat"
+          link={mode === 'parent' ? '/parent/chat' : '/child/chat'}
         />
 
-        <StatCard
-          title="보호자"
-          value="관리하기"
-          icon={Users}
-          color="bg-indigo-500"
-          link="/guardians"
-        />
+        {mode === 'child' && (
+          <StatCard
+            title="보호자"
+            value="관리하기"
+            icon={Users}
+            color="bg-indigo-500"
+            link="/child/guardians"
+          />
+        )}
+        {mode === 'parent' && (
+          <StatCard
+            title="내 정보"
+            value="확인하기"
+            icon={Users}
+            color="bg-indigo-500"
+            link="/parent/settings"
+          />
+        )}
       </div>
 
       {/* 긴급 알림 */}
@@ -198,27 +217,55 @@ const Dashboard = () => {
             빠른 액션
           </h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Link
-              to="/tasks"
-              className="btn-primary flex items-center justify-center"
-            >
-              <Calendar className="mr-2 h-5 w-5" />
-              새 일정 추가
-            </Link>
-            <Link
-              to="/chat"
-              className="btn-secondary flex items-center justify-center"
-            >
-              <MessageSquare className="mr-2 h-5 w-5" />
-              AI와 대화
-            </Link>
-            <Link
-              to="/medicine"
-              className="btn-secondary flex items-center justify-center"
-            >
-              <Pill className="mr-2 h-5 w-5" />
-              약 알림 설정
-            </Link>
+            {mode === 'parent' ? (
+              <>
+                <Link
+                  to="/parent/tasks"
+                  className="btn-primary flex items-center justify-center"
+                >
+                  <Calendar className="mr-2 h-5 w-5" />
+                  내 일정 확인
+                </Link>
+                <Link
+                  to="/parent/chat"
+                  className="btn-secondary flex items-center justify-center"
+                >
+                  <MessageSquare className="mr-2 h-5 w-5" />
+                  AI와 대화
+                </Link>
+                <Link
+                  to="/parent/medicine"
+                  className="btn-secondary flex items-center justify-center"
+                >
+                  <Pill className="mr-2 h-5 w-5" />
+                  약 복용 확인
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/child/tasks"
+                  className="btn-primary flex items-center justify-center"
+                >
+                  <Calendar className="mr-2 h-5 w-5" />
+                  부모님 일정 등록
+                </Link>
+                <Link
+                  to="/child/guardians"
+                  className="btn-secondary flex items-center justify-center"
+                >
+                  <Users className="mr-2 h-5 w-5" />
+                  보호자 관리
+                </Link>
+                <Link
+                  to="/child/medicine"
+                  className="btn-secondary flex items-center justify-center"
+                >
+                  <Pill className="mr-2 h-5 w-5" />
+                  약 알림 설정
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -256,7 +303,7 @@ const Dashboard = () => {
                 ></div>
               </div>
               <Link
-                to="/tasks"
+                to={mode === 'parent' ? '/parent/tasks' : '/child/tasks'}
                 className="text-sm text-blue-600 hover:text-blue-500"
               >
                 자세히 보기 →

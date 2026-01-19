@@ -31,6 +31,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, max_length=100)
     full_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
+    user_type: str = Field('parent', pattern='^(parent|child)$')  # 'parent' or 'child'
 
 class PasswordChangeRequest(BaseModel):
     """비밀번호 변경 요청 스키마"""

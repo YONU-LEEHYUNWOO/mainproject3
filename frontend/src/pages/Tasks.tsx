@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { tasksAPI } from '../services/api'
 import { Calendar, Plus, CheckCircle, Circle, List, Bell, BellOff } from 'lucide-react'
 import { CalendarView } from '../components/CalendarView'
@@ -19,6 +20,10 @@ interface Task {
 }
 
 const Tasks = () => {
+  const location = useLocation()
+  // 경로에서 모드 추출 (/parent/... 또는 /child/...)
+  const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
+  
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -153,7 +158,16 @@ const Tasks = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">일정 관리</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {mode === 'parent' ? '내 일정 관리 👴' : '부모님 일정 관리 👨'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {mode === 'parent' 
+              ? '오늘의 일정을 확인하고 완료하세요'
+              : '부모님의 일정을 등록하고 관리하세요'}
+          </p>
+        </div>
         <div className="flex items-center space-x-4">
           {/* 뷰 모드 토글 */}
           <div className="flex bg-gray-100 rounded-lg p-1">
@@ -207,7 +221,7 @@ const Tasks = () => {
 
           <button className="btn-primary flex items-center" onClick={handleNewTask}>
             <Plus className="mr-2 h-5 w-5" />
-            새 일정
+            {mode === 'parent' ? '일정 확인' : '일정 등록'}
           </button>
         </div>
       </div>

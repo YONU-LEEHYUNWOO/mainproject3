@@ -30,30 +30,72 @@ async def login_for_access_token(
     사용자 로그인
     사용자명과 비밀번호로 인증하여 JWT 토큰을 발급합니다.
     """
-    user = authenticate_user(db, credentials.username, credentials.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="잘못된 사용자명 또는 비밀번호입니다",
-            headers={"WWW-Authenticate": "Bearer"},
+    try:
+        print(f"📥 로그인 요청: username={credentials.username}")
+        
+        # 사용자 인증
+        try:
+            user = authenticate_user(db, credentials.username, credentials.password)
+        except Exception as auth_error:
+            print(f"❌ 인증 중 오류: {type(auth_error).__name__}: {str(auth_error)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"인증 처리 중 오류가 발생했습니다: {str(auth_error)}"
+            )
+        
+        if not user:
+            print(f"❌ 인증 실패: username={credentials.username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="잘못된 사용자명 또는 비밀번호입니다",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        print(f"✅ 인증 성공: user_id={user.id}, username={user.username}")
+
+        # 마지막 로그인 시간 업데이트
+        try:
+            update_last_login(db, user)
+            print(f"✅ 로그인 시간 업데이트 완료")
+        except Exception as update_error:
+            print(f"⚠️ 로그인 시간 업데이트 실패 (계속 진행): {type(update_error).__name__}: {str(update_error)}")
+            # 로그인 시간 업데이트 실패해도 계속 진행
+
+        # 액세스 토큰 생성
+        try:
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token, expire_time = create_access_token(
+                data={"sub": user.username, "user_id": user.id},
+                expires_delta=access_token_expires
+            )
+            print(f"✅ 토큰 생성 완료: user_id={user.id}")
+        except Exception as token_error:
+            print(f"❌ 토큰 생성 오류: {type(token_error).__name__}: {str(token_error)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"토큰 생성 중 오류가 발생했습니다: {str(token_error)}"
+            )
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=int(access_token_expires.total_seconds()),
+            user_id=user.id
         )
-
-    # 마지막 로그인 시간 업데이트
-    update_last_login(db, user)
-
-    # 액세스 토큰 생성
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token, expire_time = create_access_token(
-        data={"sub": user.username, "user_id": user.id},
-        expires_delta=access_token_expires
-    )
-
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=int(access_token_expires.total_seconds()),
-        user_id=user.id
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 로그인 처리 중 오류: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"로그인 처리 중 오류가 발생했습니다: {str(e)}"
+        )
 
 @router.post("/register", response_model=UserResponse)
 async def register_new_user(
@@ -65,18 +107,29 @@ async def register_new_user(
     새로운 사용자 계정을 생성합니다.
     """
     try:
+        print(f"📥 [REGISTER] 회원가입 요청 받음: username={user_data.username}, email={user_data.email}")
+        
         user = register_user(
             db=db,
             username=user_data.username,
             email=user_data.email,
             password=user_data.password,
             full_name=user_data.full_name,
-            phone=user_data.phone
+            phone=user_data.phone,
+            user_type=user_data.user_type
         )
-        return UserResponse.from_orm(user)
-    except HTTPException:
+        
+        print(f"✅ [REGISTER] 사용자 생성 완료: user_id={user.id}, username={user.username}")
+        response = UserResponse.model_validate(user)
+        print(f"✅ [REGISTER] 응답 전송 준비 완료")
+        return response
+    except HTTPException as http_exc:
+        print(f"❌ [REGISTER] HTTP 예외: {http_exc.status_code} - {http_exc.detail}")
         raise
     except Exception as e:
+        print(f"❌ [REGISTER] 예외 발생: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"사용자 등록 중 오류가 발생했습니다: {str(e)}"
@@ -88,7 +141,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     현재 사용자 정보 조회
     JWT 토큰에서 현재 인증된 사용자의 정보를 반환합니다.
     """
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)
 
 @router.post("/logout")
 async def logout():
