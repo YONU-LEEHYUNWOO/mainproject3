@@ -50,7 +50,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     onDateSelect(newDate)
   }
 
-  // 오늘 날짜 확인
+  /**
+   * 오늘 날짜 확인
+   */
   const isToday = (day: number) => {
     const today = new Date()
     return today.getDate() === day &&
@@ -58,11 +60,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
            today.getFullYear() === currentMonth.getFullYear()
   }
 
-  // 선택된 날짜 확인
+  /**
+   * 선택된 날짜 확인
+   */
   const isSelected = (day: number) => {
     return selectedDate.getDate() === day &&
            selectedDate.getMonth() === currentMonth.getMonth() &&
            selectedDate.getFullYear() === currentMonth.getFullYear()
+  }
+
+  /**
+   * 오늘 날짜와 선택된 날짜가 같은지 확인
+   */
+  const isTodayAndSelected = (day: number) => {
+    return isToday(day) && isSelected(day)
   }
 
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth)
@@ -123,15 +134,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               key={day}
               onClick={() => handleDateClick(day)}
               className={`
-                relative p-2 min-h-[60px] text-left hover:bg-gray-50 transition-colors
-                ${isToday(day) ? 'bg-blue-50 border-2 border-blue-500' : ''}
-                ${isSelected(day) ? 'bg-blue-100' : ''}
+                relative p-2 min-h-[60px] text-left hover:bg-gray-50 transition-colors rounded-md
+                ${isTodayAndSelected(day)
+                  ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
+                  : isToday(day)
+                  ? 'bg-blue-50 border-2 border-blue-500'
+                  : isSelected(day)
+                  ? 'bg-blue-100 border border-blue-300'
+                  : 'border border-transparent'
+                }
               `}
             >
               {/* 날짜 숫자 */}
               <span className={`
                 text-sm font-medium
-                ${isToday(day) ? 'text-blue-600' : 'text-gray-700'}
+                ${isTodayAndSelected(day)
+                  ? 'text-blue-700 font-bold'
+                  : isToday(day)
+                  ? 'text-blue-600 font-semibold'
+                  : isSelected(day)
+                  ? 'text-blue-700'
+                  : 'text-gray-700'
+                }
               `}>
                 {day}
               </span>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { tasksAPI } from '../services/api'
-import { Calendar, Plus, CheckCircle, Circle, List, Bell, BellOff } from 'lucide-react'
+import { Calendar, Plus, List, Bell, BellOff } from 'lucide-react'
 import { CalendarView } from '../components/CalendarView'
 import { TaskForm } from '../components/TaskForm'
+import { TaskItem } from '../components/TaskItem'
 import { useNotifications } from '../hooks/useNotifications'
 
 interface Task {
@@ -56,12 +57,23 @@ const Tasks = () => {
     }
   }
 
-  const toggleComplete = async (taskId: number) => {
+  /**
+   * 일정 완료 상태 변경 핸들러
+   * TaskItem 컴포넌트에서 호출됨
+   */
+  const handleToggleComplete = async (taskId: number, newCompleted: boolean) => {
+    // 로컬 상태 업데이트 (낙관적 업데이트는 TaskItem에서 처리)
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId ? { ...task, completed: newCompleted } : task
+      )
+    )
+    
+    // 백그라운드에서 목록 새로고침 (선택적)
     try {
-      await tasksAPI.toggleComplete(taskId)
-      await loadTasks() // 목록 새로고침
+      await loadTasks()
     } catch (error) {
-      console.error('일정 완료 토글 오류:', error)
+      console.error('일정 목록 새로고침 오류:', error)
     }
   }
 
@@ -262,41 +274,11 @@ const Tasks = () => {
                 ) : (
                   <div className="space-y-3">
                     {filteredTasks.map((task) => (
-                      <div
+                      <TaskItem
                         key={task.id}
-                        className={`flex items-center justify-between p-3 border rounded-lg ${task.completed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'
-                          }`}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={() => toggleComplete(task.id)}
-                            className="text-gray-400 hover:text-blue-600"
-                          >
-                            {task.completed ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <Circle className="h-5 w-5" />
-                            )}
-                          </button>
-                          <div className={task.completed ? 'line-through text-gray-500' : ''}>
-                            <h3 className="text-sm font-medium text-gray-900">
-                              {task.title}
-                            </h3>
-                            <p className="text-sm text-gray-500">
-                              {task.date} {task.time && `• ${task.time}`}
-                              {task.location && `• ${task.location}`}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`px-2 py-1 text-xs rounded-full ${task.priority === 1 ? 'bg-green-100 text-green-800' :
-                            task.priority === 2 ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                            {task.priority === 1 ? '낮음' : task.priority === 2 ? '보통' : '높음'}
-                          </span>
-                        </div>
-                      </div>
+                        task={task}
+                        onToggleComplete={handleToggleComplete}
+                      />
                     ))}
                   </div>
                 )}
@@ -319,41 +301,11 @@ const Tasks = () => {
             ) : (
               <div className="space-y-3">
                 {filteredTasks.map((task) => (
-                  <div
+                  <TaskItem
                     key={task.id}
-                    className={`flex items-center justify-between p-3 border rounded-lg ${task.completed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'
-                      }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => toggleComplete(task.id)}
-                        className="text-gray-400 hover:text-blue-600"
-                      >
-                        {task.completed ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <Circle className="h-5 w-5" />
-                        )}
-                      </button>
-                      <div className={task.completed ? 'line-through text-gray-500' : ''}>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          {task.title}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          {task.date} {task.time && `• ${task.time}`}
-                          {task.location && `• ${task.location}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs rounded-full ${task.priority === 1 ? 'bg-green-100 text-green-800' :
-                        task.priority === 2 ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                        {task.priority === 1 ? '낮음' : task.priority === 2 ? '보통' : '높음'}
-                      </span>
-                    </div>
-                  </div>
+                    task={task}
+                    onToggleComplete={handleToggleComplete}
+                  />
                 ))}
               </div>
             )}
