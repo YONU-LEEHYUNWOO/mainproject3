@@ -6,16 +6,16 @@ Google Gemini AI를 활용한 텍스트 분석, 일정 추출, 채팅 기능을 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..auth import get_current_user
-from ..models.user import User
-from ..models.ai_conversation import AIConversation
-from ..services.ai_service import AIService
-from ..schemas.ai_conversation import (
+from database import get_db
+from auth import get_current_user
+from models.user import User
+from models.ai_conversation import AIConversation
+from services.ai_service import AIService
+from schemas.ai_conversation import (
     AIAnalysisRequest, AIAnalysisResponse,
     ScheduleExtractRequest, ScheduleExtractResponse
 )
-from ..schemas.chat_message import ChatRequest, ChatResponse
+from schemas.chat_message import ChatRequest, ChatResponse
 
 router = APIRouter()
 
@@ -133,7 +133,7 @@ async def chat_with_ai(
         )
 
         # 채팅 메시지 저장 (사용자 메시지)
-        from ..models.chat_message import ChatMessage
+        from models.chat_message import ChatMessage
         user_message = ChatMessage(
             content=request.message,
             is_user=True,

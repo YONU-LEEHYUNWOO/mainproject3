@@ -82,19 +82,8 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# OPTIONS 요청 명시적 처리 (preflight 요청)
-@app.options("/{full_path:path}")
-async def options_handler(full_path: str):
-    """CORS preflight 요청 처리"""
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "3600"
-        }
-    )
+# OPTIONS 요청은 CORSMiddleware가 자동으로 처리하므로 별도 핸들러 불필요
+# 필요시 라우터 등록 후에 추가 가능
 
 # 기본 헬스체크 엔드포인트
 @app.get("/")
@@ -152,12 +141,12 @@ async def simple_login(request: Request):
 # 데이터베이스 모델 import (테이블 생성용 - 모든 모델을 import해야 테이블이 생성됨)
 # 모델들을 먼저 import하여 메타데이터에 등록
 try:
-    from .models import (
+    from models import (
         Base, User, Task, ChatMessage, AIConversation, 
         Guardian, Medicine, MedicineAlarm, NotificationLog
     )
-    from .database import engine, create_tables
-    from .config import DATABASE_URL
+    from database import engine, create_tables
+    from config import DATABASE_URL
     print("✅ 모델 import 완료")
 except Exception as e:
     print(f"❌ 모델 import 오류: {e}")
@@ -173,13 +162,15 @@ async def startup_event():
         
         # 데이터베이스 파일 경로 확인
         import os
+        # 상대 import 사용 (run.py에서 sys.path 추가 후 모듈로 실행)
+        # 이미 상단에서 import한 것을 사용
         db_path = DATABASE_URL.replace("sqlite:///", "")
         if os.path.exists(db_path):
             print(f"📁 기존 데이터베이스 파일 발견: {db_path}")
         else:
             print(f"📁 새 데이터베이스 파일 생성: {db_path}")
         
-        # 테이블 생성
+        # 테이블 생성 (이미 상단에서 import한 create_tables 사용)
         create_tables()
         
         # 생성된 테이블 확인
@@ -275,38 +266,77 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 # 라우터 등록
+# run.py에서 sys.path에 backend 폴더를 추가하므로 절대 import 사용
+print("\n" + "="*60)
+print("🔄 라우터 등록 시작...")
+print("="*60)
+
 try:
-    from .routers import auth, tasks, ai, guardians, medicine
-    from .routers import notification_logs
+    # 라우터를 직접 import (routers 패키지 경유)
+    print("📦 라우터 모듈 import 시도...")
+    import routers.auth as auth
+    print(f"  ✅ auth 모듈 import 성공, router 타입: {type(auth.router)}")
+    print(f"  📍 auth 라우터 경로: {[r.path for r in auth.router.routes]}")
+    
+    import routers.tasks as tasks
+    import routers.ai as ai
+    import routers.guardians as guardians
+    import routers.medicine as medicine
+    import routers.notification_logs as notification_logs
+    print("✅ 모든 라우터 모듈 import 성공")
     
     # 인증 라우터 등록
+    print("\n📝 인증 라우터 등록 중...")
     app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
-    print("✅ 인증 라우터 등록 완료")
+    print("✅ 인증 라우터 등록 완료: /api/auth")
     
     # 일정 관리 라우터 등록
     app.include_router(tasks.router, prefix="/api/tasks", tags=["일정관리"])
-    print("✅ 일정 관리 라우터 등록 완료")
+    print("✅ 일정 관리 라우터 등록 완료: /api/tasks")
     
     # 약 관리 라우터 등록
     app.include_router(medicine.router, prefix="/api/medicine", tags=["약관리"])
-    print("✅ 약 관리 라우터 등록 완료")
+    print("✅ 약 관리 라우터 등록 완료: /api/medicine")
     
     # 보호자 관리 라우터 등록
     app.include_router(guardians.router, prefix="/api/guardians", tags=["보호자"])
-    print("✅ 보호자 관리 라우터 등록 완료")
+    print("✅ 보호자 관리 라우터 등록 완료: /api/guardians")
     
     # AI 라우터 등록
     app.include_router(ai.router, prefix="/api/ai", tags=["AI분석"])
-    print("✅ AI 라우터 등록 완료")
+    print("✅ AI 라우터 등록 완료: /api/ai")
     
     # 알림 로그 라우터 등록
     app.include_router(notification_logs.router, prefix="/api/notification-logs", tags=["알림로그"])
-    print("✅ 알림 로그 라우터 등록 완료")
+    print("✅ 알림 로그 라우터 등록 완료: /api/notification-logs")
+    
+    print("\n✅ 모든 라우터 등록 완료!")
+    
+    # 등록된 라우터 확인
+    print(f"\n📋 등록된 라우터 목록:")
+    auth_routes = [r for r in app.routes if hasattr(r, 'path') and '/api/auth' in r.path]
+    print(f"  🔐 인증 라우터 ({len(auth_routes)}개):")
+    for route in auth_routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            methods = ', '.join(route.methods) if route.methods else 'N/A'
+            print(f"    - {methods} {route.path}")
+    
+    all_routes = [r for r in app.routes if hasattr(r, 'path') and hasattr(r, 'methods')]
+    print(f"\n  📊 전체 라우터 개수: {len(all_routes)}개")
+    for route in all_routes[:10]:  # 처음 10개만 출력
+        methods = ', '.join(route.methods) if route.methods else 'N/A'
+        print(f"    - {methods} {route.path}")
+    if len(all_routes) > 10:
+        print(f"    ... 외 {len(all_routes) - 10}개")
+    
+    print("="*60 + "\n")
     
 except Exception as e:
-    print(f"❌ 라우터 등록 오류: {e}")
+    print(f"\n❌ 라우터 등록 오류: {type(e).__name__}: {e}")
     import traceback
     traceback.print_exc()
+    print("="*60 + "\n")
+    # 오류가 발생해도 서버는 계속 실행 (디버깅용)
 
 if __name__ == "__main__":
     import uvicorn

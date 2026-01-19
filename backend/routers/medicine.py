@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 
-from ..database import get_db
-from ..auth import get_current_user
-from ..models.user import User
-from ..models.medicine_alarm import MedicineAlarm
-from ..schemas.medicine_alarm import (
+from database import get_db
+from auth import get_current_user
+from models.user import User
+from models.medicine_alarm import MedicineAlarm
+from schemas.medicine_alarm import (
     MedicineAlarmCreate, MedicineAlarmUpdate, MedicineAlarmResponse,
     MedicineAlarmListResponse, MedicineTakenRequest, MedicineTakenResponse
 )

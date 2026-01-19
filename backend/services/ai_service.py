@@ -7,7 +7,7 @@ import json
 import time
 from typing import Dict, List, Optional, Tuple
 import google.generativeai as genai
-from ..config import GEMINI_API_KEY, GEMINI_MODEL
+from config import GEMINI_API_KEY, GEMINI_MODEL
 
 class AIService:
     """AI 서비스 클래스"""

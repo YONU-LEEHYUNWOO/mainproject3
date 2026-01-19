@@ -8,16 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..auth import (
+from database import get_db
+from auth import (
     authenticate_user, register_user, get_current_user,
     create_access_token, update_last_login, ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from ..schemas.auth import (
+from schemas.auth import (
     Token, LoginRequest, RegisterRequest, PasswordChangeRequest
 )
-from ..schemas.user import UserResponse
-from ..models.user import User
+from schemas.user import UserResponse
+from models.user import User
 
 router = APIRouter()
 
@@ -162,7 +162,7 @@ async def change_password(
     비밀번호 변경
     현재 사용자의 비밀번호를 변경합니다.
     """
-    from ..auth import verify_password, get_password_hash
+    from auth import verify_password, get_password_hash
 
     # 현재 비밀번호 검증
     if not verify_password(password_data.current_password, current_user.hashed_password):

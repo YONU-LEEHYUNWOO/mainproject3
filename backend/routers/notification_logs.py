@@ -7,11 +7,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..auth import get_current_user
-from ..models.user import User
-from ..models.notification_log import NotificationLog
-from ..schemas.notification_log import (
+from database import get_db
+from auth import get_current_user
+from models.user import User
+from models.notification_log import NotificationLog
+from schemas.notification_log import (
     NotificationLogCreate, NotificationLogUpdate, NotificationLogResponse, NotificationLogListResponse
 )
 

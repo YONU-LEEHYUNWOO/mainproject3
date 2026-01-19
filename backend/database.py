@@ -6,8 +6,8 @@ SQLAlchemy를 사용하여 데이터베이스 연결을 관리합니다.
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from .config import DATABASE_URL
-from .models.base import Base  # 모델의 Base 사용
+from config import DATABASE_URL
+from models.base import Base  # 모델의 Base 사용
 
 # SQLAlchemy 엔진 생성
 engine = create_engine(
@@ -23,7 +23,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def ensure_users_table():
     """users 테이블이 존재하는지 확인하고 없으면 생성, user_type 컬럼이 없으면 추가"""
     from sqlalchemy import inspect, text
-    from .config import DATABASE_URL
     import os
     
     # 데이터베이스 파일 경로 확인
@@ -178,7 +177,7 @@ def create_tables():
     """데이터베이스 테이블 생성"""
     try:
         # 모든 모델이 import되었는지 확인
-        from .models import (
+        from models import (
             User, Task, ChatMessage, AIConversation,
             Guardian, Medicine, MedicineAlarm, NotificationLog
         )

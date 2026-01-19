@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
-from ..database import get_db
-from ..auth import get_current_user
-from ..models.user import User
-from ..models.task import Task
-from ..schemas.task import (
+from database import get_db
+from auth import get_current_user
+from models.user import User
+from models.task import Task
+from schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskListResponse, TaskFilter
 )
 

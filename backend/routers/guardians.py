@@ -7,11 +7,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..auth import get_current_user
-from ..models.user import User
-from ..models.guardian import Guardian
-from ..schemas.guardian import (
+from database import get_db
+from auth import get_current_user
+from models.user import User
+from models.guardian import Guardian
+from schemas.guardian import (
     GuardianCreate, GuardianUpdate, GuardianResponse, GuardianListResponse
 )
 

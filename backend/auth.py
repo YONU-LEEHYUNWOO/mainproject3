@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 
-from .database import get_db
-from .models.user import User
-from .config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from database import get_db
+from models.user import User
+from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 # 비밀번호 해싱 컨텍스트 (bcrypt 호환성 개선)
 pwd_context = CryptContext(
@@ -45,20 +45,23 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             import hashlib
             password_to_check = hashlib.sha256(password_bytes).hexdigest()
         
-        # bcrypt 직접 사용
+        # bcrypt 직접 사용 (72바이트 제한)
         try:
-            result = bcrypt.checkpw(
-                password_to_check.encode('utf-8'),
-                hashed_password.encode('utf-8')
-            )
+            password_bytes_to_check = password_to_check.encode('utf-8')[:72]
+            hashed_bytes = hashed_password.encode('utf-8')
+            result = bcrypt.checkpw(password_bytes_to_check, hashed_bytes)
             print(f"AUTH DEBUG: 비밀번호 검증 결과 (bcrypt 직접) - {result}")
             return result
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, AttributeError) as e:
             # passlib을 fallback으로 사용
             print(f"AUTH DEBUG: bcrypt 직접 사용 실패, passlib 사용 - {e}")
-            result = pwd_context.verify(password_to_check, hashed_password)
-            print(f"AUTH DEBUG: 비밀번호 검증 결과 (passlib) - {result}")
-            return result
+            try:
+                result = pwd_context.verify(password_to_check[:72] if len(password_to_check.encode('utf-8')) > 72 else password_to_check, hashed_password)
+                print(f"AUTH DEBUG: 비밀번호 검증 결과 (passlib) - {result}")
+                return result
+            except Exception as passlib_error:
+                print(f"AUTH ERROR: passlib 검증 실패 - {passlib_error}")
+                return False
     except Exception as e:
         print(f"AUTH ERROR: 비밀번호 검증 중 오류 - {type(e).__name__}: {str(e)}")
         import traceback
@@ -69,11 +72,25 @@ def get_password_hash(password: str) -> str:
     """비밀번호 해시 생성 (bcrypt 72바이트 제한 고려)"""
     # bcrypt는 72바이트 제한이 있으므로 긴 패스워드는 해시하기 전에 자름
     password_bytes = password.encode('utf-8')
+    
+    # 72바이트 제한 처리
     if len(password_bytes) > 72:
         # 긴 패스워드는 SHA256으로 먼저 해시한 후 bcrypt 적용
         import hashlib
         password = hashlib.sha256(password_bytes).hexdigest()
-    return pwd_context.hash(password)
+        password_bytes = password.encode('utf-8')
+    
+    # bcrypt 직접 사용 (passlib 우회)
+    try:
+        import bcrypt
+        # bcrypt 직접 사용하여 해시 생성
+        salt = bcrypt.gensalt(rounds=12)
+        hashed = bcrypt.hashpw(password_bytes[:72], salt)  # 72바이트로 제한
+        return hashed.decode('utf-8')
+    except Exception as e:
+        # bcrypt 직접 사용 실패 시 passlib 사용 (72바이트 제한)
+        print(f"AUTH WARNING: bcrypt 직접 사용 실패, passlib 사용 - {e}")
+        return pwd_context.hash(password[:72] if len(password_bytes) > 72 else password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """JWT 액세스 토큰 생성"""
