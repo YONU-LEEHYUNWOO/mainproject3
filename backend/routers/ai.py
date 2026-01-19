@@ -5,6 +5,7 @@ Google Gemini AI를 활용한 텍스트 분석, 일정 추출, 채팅 기능을 
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+import json
 
 from database import get_db
 from auth import get_current_user
@@ -16,13 +17,14 @@ from schemas.ai_conversation import (
     ScheduleExtractRequest, ScheduleExtractResponse
 )
 from schemas.chat_message import ChatRequest, ChatResponse
+from utils.response import success_response
 
 router = APIRouter()
 
 # AI 서비스 인스턴스
 ai_service = AIService()
 
-@router.post("/analyze", response_model=AIAnalysisResponse)
+@router.post("/analyze")
 async def analyze_text(
     request: AIAnalysisRequest,
     current_user: User = Depends(get_current_user),
@@ -57,16 +59,21 @@ async def analyze_text(
         db.add(ai_conversation)
         db.commit()
 
-        return AIAnalysisResponse(
-            analysis=analysis_result.get("response", ""),
-            conversation_type=analysis_result.get("intent", request.analysis_type),
-            intent=analysis_result.get("intent"),
-            entities=analysis_result.get("entities", {}),
-            sentiment=analysis_result.get("sentiment"),
-            confidence=analysis_result.get("confidence", 0.8),
-            tokens_used=analysis_result.get("tokens_used", 0),
-            processing_time=analysis_result.get("processing_time", 0.0),
-            model_version=analysis_result.get("model_version", "unknown")
+        analysis_data = {
+            "analysis": analysis_result.get("response", ""),
+            "conversation_type": analysis_result.get("intent", request.analysis_type),
+            "intent": analysis_result.get("intent"),
+            "entities": analysis_result.get("entities", {}),
+            "sentiment": analysis_result.get("sentiment"),
+            "confidence": analysis_result.get("confidence", 0.8),
+            "tokens_used": analysis_result.get("tokens_used", 0),
+            "processing_time": analysis_result.get("processing_time", 0.0),
+            "model_version": analysis_result.get("model_version", "unknown")
+        }
+
+        return success_response(
+            data=analysis_data,
+            message="분석이 완료되었습니다"
         )
 
     except Exception as e:
@@ -75,7 +82,7 @@ async def analyze_text(
             detail=f"AI 분석 중 오류가 발생했습니다: {str(e)}"
         )
 
-@router.post("/schedule-extract", response_model=ScheduleExtractResponse)
+@router.post("/schedule-extract")
 async def extract_schedule(
     request: ScheduleExtractRequest,
     current_user: User = Depends(get_current_user),
@@ -102,10 +109,14 @@ async def extract_schedule(
             db.add(ai_conversation)
             db.commit()
 
-        return ScheduleExtractResponse(
-            extracted_tasks=result.get("extracted_tasks", []),
-            confidence=result.get("confidence", 0.0),
-            analysis=result.get("analysis", "")
+        return success_response(
+            data={
+                "extracted_tasks": result.get("extracted_tasks", []),
+                "confidence": result.get("confidence", 0.0),
+                "analysis": result.get("analysis", ""),
+                "conflicts": []  # TODO: 충돌 감지 로직 추가 필요
+            },
+            message="일정이 추출되었습니다"
         )
 
     except Exception as e:
@@ -114,7 +125,7 @@ async def extract_schedule(
             detail=f"일정 추출 중 오류가 발생했습니다: {str(e)}"
         )
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat")
 async def chat_with_ai(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
@@ -168,14 +179,13 @@ async def chat_with_ai(
 
         db.commit()
 
-        return ChatResponse(
-            message=ai_message,
-            ai_response=chat_result.get("message", ""),
-            conversation_type=chat_result.get("conversation_type", "general"),
-            intent=None,  # 추후 구현
-            entities=None,  # 추후 구현
-            sentiment=None,  # 추후 구현
-            confidence=chat_result.get("confidence", 0.0)
+        return success_response(
+            data={
+                "ai_response": chat_result.get("message", ""),
+                "conversation_type": chat_result.get("conversation_type", "general"),
+                "confidence": chat_result.get("confidence", 0.0)
+            },
+            message="채팅이 완료되었습니다"
         )
 
     except Exception as e:
@@ -199,10 +209,13 @@ async def get_conversations(
         AIConversation.user_id == current_user.id
     ).order_by(AIConversation.created_at.desc()).offset(skip).limit(limit).all()
 
-    return {
-        "conversations": [conv.to_analysis_dict() for conv in conversations],
-        "total": len(conversations)
-    }
+    return success_response(
+        data={
+            "conversations": [conv.to_analysis_dict() for conv in conversations],
+            "total": len(conversations)
+        },
+        message="성공"
+    )
 
 @router.get("/health")
 async def ai_service_health():
@@ -212,13 +225,20 @@ async def ai_service_health():
     try:
         # 간단한 테스트로 AI 서비스 상태 확인
         test_result = ai_service.analyze_text("테스트 메시지", "general")
-        return {
-            "status": "healthy",
-            "model": test_result.get("model_version", "unknown"),
-            "response_time": test_result.get("processing_time", 0.0)
-        }
+        return success_response(
+            data={
+                "status": "healthy",
+                "model": test_result.get("model_version", "unknown"),
+                "response_time": test_result.get("processing_time", 0.0)
+            },
+            message="AI 서비스가 정상 작동 중입니다"
+        )
     except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        return success_response(
+            data={
+                "status": "unhealthy",
+                "error": str(e)
+            },
+            message="AI 서비스에 문제가 있습니다",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )

@@ -8,7 +8,7 @@ import { MedicineAlarmCard } from '../components/MedicineAlarmCard'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { EmptyState } from '../components/EmptyState'
-import { Pill, Plus } from 'lucide-react'
+import { Pill, Plus, Loader2 } from 'lucide-react'
 
 interface MedicineAlarm {
   id: number
@@ -55,18 +55,23 @@ const Medicine = () => {
       const response = await medicineAPI.getTodayAlarms()
       
       // API 응답 형식에 따라 데이터 추출
+      // 새로운 응답 형식: {status, message, data: {alarms, total}}
       let alarmsData: MedicineAlarm[] = []
       
       if (response.data) {
-        // 응답이 { data: { alarms: [...] } } 형식인 경우
-        if (response.data.alarms && Array.isArray(response.data.alarms)) {
+        // 새로운 통일된 응답 형식: {status, message, data: {alarms: [...]}}
+        if (response.data.data?.alarms && Array.isArray(response.data.data.alarms)) {
+          alarmsData = response.data.data.alarms
+        }
+        // 기존 형식 호환성: { data: { alarms: [...] } }
+        else if (response.data.alarms && Array.isArray(response.data.alarms)) {
           alarmsData = response.data.alarms
         }
-        // 응답이 { data: [...] } 형식인 경우
+        // 기존 형식 호환성: { data: [...] }
         else if (Array.isArray(response.data)) {
           alarmsData = response.data
         }
-        // 응답이 { data: { data: [...] } } 형식인 경우
+        // 기존 형식 호환성: { data: { data: [...] } }
         else if (response.data.data && Array.isArray(response.data.data)) {
           alarmsData = response.data.data
         }
@@ -80,7 +85,11 @@ const Medicine = () => {
       
       setAlarms(alarmsData)
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || '약 목록을 불러오는데 실패했습니다.'
+      // 새로운 응답 형식: {status, message, data} 또는 {detail}
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.detail || 
+                          error.message || 
+                          '약 목록을 불러오는데 실패했습니다.'
       setError(errorMessage)
       console.error('약 목록 로드 오류:', error)
       // 에러 발생 시 빈 배열로 설정
@@ -103,18 +112,23 @@ const Medicine = () => {
       const response = await medicineAPI.getAlarms()
       
       // API 응답 형식에 따라 데이터 추출
+      // 새로운 응답 형식: {status, message, data: {alarms, total}}
       let alarmsData: MedicineAlarm[] = []
       
       if (response.data) {
-        // 응답이 { data: { alarms: [...] } } 형식인 경우
-        if (response.data.alarms && Array.isArray(response.data.alarms)) {
+        // 새로운 통일된 응답 형식: {status, message, data: {alarms: [...]}}
+        if (response.data.data?.alarms && Array.isArray(response.data.data.alarms)) {
+          alarmsData = response.data.data.alarms
+        }
+        // 기존 형식 호환성: { data: { alarms: [...] } }
+        else if (response.data.alarms && Array.isArray(response.data.alarms)) {
           alarmsData = response.data.alarms
         }
-        // 응답이 { data: [...] } 형식인 경우
+        // 기존 형식 호환성: { data: [...] }
         else if (Array.isArray(response.data)) {
           alarmsData = response.data
         }
-        // 응답이 { data: { data: [...] } } 형식인 경우
+        // 기존 형식 호환성: { data: { data: [...] } }
         else if (response.data.data && Array.isArray(response.data.data)) {
           alarmsData = response.data.data
         }
@@ -193,7 +207,11 @@ const Medicine = () => {
       await medicineAPI.deleteAlarm(alarmId)
       await loadAlarms()
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || '약 알림 삭제에 실패했습니다.'
+      // 새로운 응답 형식: {status, message, data} 또는 {detail}
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.detail || 
+                          error.message || 
+                          '약 알림 삭제에 실패했습니다.'
       alert(errorMessage)
       console.error('약 알림 삭제 오류:', error)
     }

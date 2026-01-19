@@ -26,7 +26,7 @@ const Tasks = () => {
   const location = useLocation()
   // 경로에서 모드 추출 (/parent/... 또는 /child/...)
   const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
-  
+
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -43,17 +43,27 @@ const Tasks = () => {
   const loadTasks = async () => {
     try {
       const response = await tasksAPI.getTasks()
-      const tasksData = response.data.tasks
-      setTasks(tasksData)
+      
+      // 백엔드 응답 형식에 따라 데이터 추출
+      // 새로운 응답 형식: {status, message, data: {tasks, total, ...}}
+      // 기존 형식 호환성 유지
+      const tasksData = response.data.data?.tasks || response.data.tasks || []
+      
+      // 배열이 아닌 경우 빈 배열로 설정
+      const safeTasksData = Array.isArray(tasksData) ? tasksData : []
+      setTasks(safeTasksData)
 
       // 완료되지 않은 일정에 대해 알림 스케줄링
-      tasksData
-        .filter((task: Task) => !task.completed && task.date && (task.time || task.time === null))
-        .forEach((task: Task) => {
-          scheduleTaskNotification(task)
-        })
+      if (Array.isArray(safeTasksData)) {
+        safeTasksData
+          .filter((task: Task) => !task.completed && task.date && (task.time || task.time === null))
+          .forEach((task: Task) => {
+            scheduleTaskNotification(task)
+          })
+      }
     } catch (error) {
       console.error('일정 로드 오류:', error)
+      setTasks([]) // 에러 발생 시 빈 배열로 설정
     } finally {
       setIsLoading(false)
     }
@@ -70,7 +80,7 @@ const Tasks = () => {
         task.id === taskId ? { ...task, completed: newCompleted } : task
       )
     )
-    
+
     // 백그라운드에서 목록 새로고침 (선택적)
     try {
       await loadTasks()
@@ -82,6 +92,11 @@ const Tasks = () => {
   // 날짜별 일정 개수 계산
   const getTaskCountsByDate = () => {
     const counts: { [key: string]: { total: number; completed: number } } = {}
+
+    // tasks가 배열인지 확인
+    if (!tasks || !Array.isArray(tasks)) {
+      return counts
+    }
 
     tasks.forEach(task => {
       // 백엔드에서 반환된 date를 로컬 날짜로 변환
@@ -177,7 +192,7 @@ const Tasks = () => {
             {mode === 'parent' ? '내 일정 관리 👴' : '부모님 일정 관리 👨'}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {mode === 'parent' 
+            {mode === 'parent'
               ? '오늘의 일정을 확인하고 완료하세요'
               : '부모님의 일정을 등록하고 관리하세요'}
           </p>

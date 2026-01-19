@@ -18,6 +18,7 @@ from schemas.auth import (
 )
 from schemas.user import UserResponse
 from models.user import User
+from utils.response import success_response
 
 router = APIRouter()
 
@@ -135,13 +136,16 @@ async def register_new_user(
             detail=f"사용자 등록 중 오류가 발생했습니다: {str(e)}"
         )
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """
     현재 사용자 정보 조회
     JWT 토큰에서 현재 인증된 사용자의 정보를 반환합니다.
     """
-    return UserResponse.model_validate(current_user)
+    return success_response(
+        data=UserResponse.model_validate(current_user).dict(),
+        message="성공"
+    )
 
 @router.post("/logout")
 async def logout():
@@ -150,7 +154,10 @@ async def logout():
     클라이언트 측에서 토큰을 삭제하도록 안내합니다.
     실제로는 토큰 블랙리스트 등의 추가 구현이 필요할 수 있습니다.
     """
-    return {"message": "로그아웃되었습니다. 클라이언트에서 토큰을 삭제해주세요."}
+    return success_response(
+        data=None,
+        message="로그아웃되었습니다. 클라이언트에서 토큰을 삭제해주세요."
+    )
 
 @router.post("/change-password")
 async def change_password(
@@ -175,14 +182,20 @@ async def change_password(
     current_user.hashed_password = get_password_hash(password_data.new_password)
     db.commit()
 
-    return {"message": "비밀번호가 성공적으로 변경되었습니다"}
+    return success_response(
+        data=None,
+        message="비밀번호가 성공적으로 변경되었습니다"
+    )
 
 # 개발용 엔드포인트 (프로덕션에서는 제거)
 @router.get("/test-token")
 async def test_token(current_user: User = Depends(get_current_user)):
     """토큰 테스트용 엔드포인트 (개발용)"""
-    return {
-        "user_id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email
-    }
+    return success_response(
+        data={
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email
+        },
+        message="토큰이 유효합니다"
+    )

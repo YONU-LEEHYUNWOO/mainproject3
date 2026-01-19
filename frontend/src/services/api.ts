@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios'
 
 // API 기본 설정
+// 직접 백엔드 서버로 요청 (프록시 사용 안 함)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 // Axios 인스턴스 생성
@@ -20,6 +21,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    
+    // 요청 로깅 (디버깅용)
+    const fullUrl = `${config.baseURL}${config.url}`
+    console.log(`🌐 [${config.method?.toUpperCase()}] ${fullUrl}`)
+    console.log('📤 요청 헤더:', config.headers)
+    console.log('📤 요청 데이터:', config.data)
+    
     return config
   },
   (error) => {
@@ -87,7 +95,22 @@ api.interceptors.response.use(
     
     // 500 서버 오류 처리
     if (error.response?.status >= 500) {
-      return Promise.reject(new Error('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'))
+      // 백엔드에서 전달된 상세 오류 정보를 프론트엔드 콘솔에 출력
+      const errorDetail = error.response?.data?.detail
+      console.error('❌ 백엔드 서버 오류:', {
+        status: error.response?.status,
+        error_type: typeof errorDetail === 'object' ? errorDetail?.error_type : null,
+        error_message: typeof errorDetail === 'object' ? errorDetail?.error_message : errorDetail,
+        traceback: typeof errorDetail === 'object' ? errorDetail?.traceback : null,
+        full_response: error.response?.data
+      })
+      
+      // 사용자에게는 간단한 메시지만 표시
+      const userMessage = typeof errorDetail === 'object' && errorDetail?.message 
+        ? errorDetail.message 
+        : '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+      
+      return Promise.reject(new Error(userMessage))
     }
     
     // 기타 오류 처리

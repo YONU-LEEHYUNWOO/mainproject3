@@ -6,8 +6,17 @@ SQLAlchemy를 사용하여 데이터베이스 연결을 관리합니다.
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from config import DATABASE_URL
-from models.base import Base  # 모델의 Base 사용
+
+# 패키지 import와 직접 실행 모두 지원
+try:
+    from config import DATABASE_URL
+except ImportError:
+    from backend.config import DATABASE_URL
+
+try:
+    from models.base import Base  # 모델의 Base 사용
+except ImportError:
+    from backend.models.base import Base
 
 # SQLAlchemy 엔진 생성
 engine = create_engine(
@@ -177,10 +186,16 @@ def create_tables():
     """데이터베이스 테이블 생성"""
     try:
         # 모든 모델이 import되었는지 확인
-        from models import (
-            User, Task, ChatMessage, AIConversation,
-            Guardian, Medicine, MedicineAlarm, NotificationLog
-        )
+        try:
+            from models import (
+                User, Task, ChatMessage, AIConversation,
+                Guardian, Medicine, MedicineAlarm, NotificationLog
+            )
+        except ImportError:
+            from backend.models import (
+                User, Task, ChatMessage, AIConversation,
+                Guardian, Medicine, MedicineAlarm, NotificationLog
+            )
         print(f"📊 테이블 생성 시작...")
         print(f"📊 등록된 테이블: {list(Base.metadata.tables.keys())}")
         

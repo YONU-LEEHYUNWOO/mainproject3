@@ -53,8 +53,11 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete }) =>
       // 실패 시 이전 상태로 롤백
       setLocalCompleted(!newCompleted)
       
-      // 에러 메시지 설정
-      const errorMessage = error.response?.data?.message || error.message || '일정 완료 상태 변경에 실패했습니다.'
+      // 에러 메시지 설정 (새로운 응답 형식 지원)
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.detail || 
+                          error.message || 
+                          '일정 완료 상태 변경에 실패했습니다.'
       setError(errorMessage)
       
       // 3초 후 에러 메시지 자동 제거

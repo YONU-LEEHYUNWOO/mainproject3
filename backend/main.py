@@ -20,26 +20,33 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    debug=True  # 디버그 모드 활성화
+    debug=True,  # 디버그 모드 활성화
+    swagger_ui_init_oauth={
+        "clientId": "swagger-ui",
+        "usePkceWithAuthorizationCodeGrant": False,
+    }
 )
 
 # 요청 로깅 미들웨어 추가 (CORS 미들웨어보다 먼저)
+# 로거 import를 모듈 레벨로 이동 (캐시 문제 방지)
+from utils.logger import log_info, log_error
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """모든 요청을 로깅하는 미들웨어"""
+    """모든 요청을 로깅하는 미들웨어 - uvicorn 기본 로거와 충돌하지 않도록 안전한 로깅"""
     import time
+    
     start_time = time.time()
     
-    # 요청 정보 상세 로깅
-    print(f"\n{'='*60}")
-    print(f"🌐 [{request.method}] {request.url.path}")
-    print(f"📍 Origin: {request.headers.get('origin', 'N/A')}")
-    print(f"📍 Headers: {dict(request.headers)}")
+    # 요청 로그 출력
+    log_info(f"[{request.method}] {request.url.path} - Origin: {request.headers.get('origin', 'N/A')}")
     
     try:
         response = await call_next(request)
         elapsed = time.time() - start_time
-        print(f"✅ [{request.method}] {request.url.path} - Status: {response.status_code} ({elapsed:.3f}s)")
+        
+        # 성공 로그 출력
+        log_info(f"[{request.method}] {request.url.path} - Status: {response.status_code} ({elapsed:.3f}s)")
         
         # CORS 헤더 명시적 추가 (이중 보장)
         response.headers["Access-Control-Allow-Origin"] = "*"
@@ -47,16 +54,18 @@ async def log_requests(request: Request, call_next):
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Expose-Headers"] = "*"
         
-        print(f"📤 CORS 헤더 추가됨")
-        print(f"{'='*60}\n")
         return response
     except Exception as e:
         elapsed = time.time() - start_time
-        print(f"❌ [{request.method}] {request.url.path} - 오류: {type(e).__name__}: {str(e)} ({elapsed:.3f}s)")
-        import traceback
-        traceback.print_exc()
+        # 에러 로그 출력 (traceback 포함)
+        log_error(
+            f"[{request.method}] {request.url.path} - 오류: {type(e).__name__}: {str(e)} ({elapsed:.3f}s)",
+            exc_info=e
+        )
+        
         # 오류 발생 시에도 CORS 헤더 포함한 응답 반환
         from fastapi.responses import JSONResponse
+        
         error_response = JSONResponse(
             status_code=500,
             content={"detail": f"서버 오류: {str(e)}"},
@@ -67,19 +76,22 @@ async def log_requests(request: Request, call_next):
                 "Access-Control-Expose-Headers": "*"
             }
         )
-        print(f"📤 오류 응답에 CORS 헤더 추가됨")
-        print(f"{'='*60}\n")
         return error_response
 
-# CORS 설정 (프론트엔드 연결용) - 개발용으로 모든 origin 허용
-# 미들웨어는 역순으로 실행되므로 나중에 등록해야 먼저 실행됨
+# CORS 설정 (프론트엔드 연결용)
+# 프론트엔드 URL을 명시적으로 허용 (개발 환경)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 모든 origin 허용 (개발용)
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Vite 기본 포트
+        "http://localhost:3000",  # React 기본 포트
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,  # 쿠키 및 인증 정보 허용
+    allow_methods=["*"],  # GET, POST, PUT, PATCH, DELETE, OPTIONS 모두 허용
+    allow_headers=["*"],  # 모든 헤더 허용
+    expose_headers=["*"],  # 모든 헤더 노출
 )
 
 # OPTIONS 요청은 CORSMiddleware가 자동으로 처리하므로 별도 핸들러 불필요
@@ -89,6 +101,19 @@ app.add_middleware(
 @app.get("/")
 async def root():
     """API 헬스체크"""
+    import sys
+    import logging
+    
+    logger = logging.getLogger("uvicorn.access")
+    
+    msg = "✅ [ROOT] / 엔드포인트 호출됨"
+    
+    # 여러 방법으로 출력
+    sys.stderr.write(f"{'='*60}\n{msg}\n{'='*60}\n")
+    sys.stderr.flush()
+    logger.info(msg)
+    print(f"{'='*60}\n{msg}\n{'='*60}\n", flush=True)
+    
     return {"message": "AI 케어비서 API 서버가 실행 중입니다"}
 
 @app.get("/health")
@@ -234,34 +259,80 @@ CORS_HEADERS = {
 # 전역 예외 핸들러 추가
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """전역 예외 핸들러 - 모든 예외를 캐치하여 로깅"""
-    print(f"❌ 예외 발생: {type(exc).__name__}: {str(exc)}")
-    print(f"📍 경로: {request.method} {request.url}")
-    traceback.print_exc()
+    """전역 예외 핸들러 - 모든 예외를 캐치하여 로깅 및 traceback 출력"""
+    import io
+    from utils.logger import log_error
+    from utils.serializer import serialize_datetime_objects
+    
+    # 에러 로그 출력 (traceback 포함)
+    log_error(
+        f"전역 예외 발생 - {type(exc).__name__}: {str(exc)} | 경로: {request.method} {request.url.path}",
+        exc_info=exc
+    )
+    
+    # 스택 트레이스 캡처
+    error_trace = io.StringIO()
+    traceback.print_exc(file=error_trace)
+    error_trace_str = error_trace.getvalue()
+    
+    # 오류 응답 content 생성
+    error_content = {
+        "detail": {
+            "message": f"서버 내부 오류가 발생했습니다: {str(exc)}",
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "path": f"{request.method} {request.url.path}",
+            "traceback": error_trace_str.split('\n')[-15:] if len(error_trace_str.split('\n')) > 15 else error_trace_str.split('\n')
+        }
+    }
+    
+    # datetime 객체 변환 후 JSON 직렬화
+    error_content = serialize_datetime_objects(error_content)
+    
+    # 프론트엔드에서 확인할 수 있도록 상세 오류 정보 포함
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": f"서버 내부 오류가 발생했습니다: {str(exc)}",
-            "type": type(exc).__name__
-        },
+        content=error_content,
         headers=CORS_HEADERS
     )
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """HTTP 예외 핸들러"""
+    # detail이 이미 딕셔너리인 경우 그대로 사용, 문자열인 경우 메시지로 변환
+    detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+    
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail},
+        content={"detail": detail},
         headers=CORS_HEADERS
     )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """요청 검증 오류 핸들러"""
+    from utils.serializer import serialize_datetime_objects
+    from utils.logger import log_error
+    
+    # 검증 오류 로그 출력
+    log_error(
+        f"요청 검증 오류 - 경로: {request.method} {request.url.path}",
+        exc_info=exc
+    )
+    
+    # body를 JSON 직렬화 가능한 형태로 변환
+    body_for_json = exc.body
+    if body_for_json is not None:
+        try:
+            # datetime 객체를 재귀적으로 변환
+            body_for_json = serialize_datetime_objects(body_for_json)
+        except Exception as e:
+            # 변환 실패 시 문자열로 변환
+            body_for_json = str(body_for_json)
+    
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "body": exc.body},
+        content={"detail": exc.errors(), "body": body_for_json},
         headers=CORS_HEADERS
     )
 
@@ -273,42 +344,72 @@ print("="*60)
 
 try:
     # 라우터를 직접 import (routers 패키지 경유)
+    # run.py에서 sys.path에 backend를 추가하므로 routers.auth로 import 가능
     print("📦 라우터 모듈 import 시도...")
-    import routers.auth as auth
-    print(f"  ✅ auth 모듈 import 성공, router 타입: {type(auth.router)}")
-    print(f"  📍 auth 라우터 경로: {[r.path for r in auth.router.routes]}")
     
-    import routers.tasks as tasks
-    import routers.ai as ai
-    import routers.guardians as guardians
-    import routers.medicine as medicine
-    import routers.notification_logs as notification_logs
-    print("✅ 모든 라우터 모듈 import 성공")
+    # 인증 라우터 import 및 등록
+    try:
+        import routers.auth as auth
+        print(f"  ✅ auth 모듈 import 성공, router 타입: {type(auth.router)}")
+        print(f"  📍 auth 라우터 경로: {[r.path for r in auth.router.routes]}")
+        app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+        print("✅ 인증 라우터 등록 완료: /api/auth")
+    except Exception as e:
+        print(f"❌ auth 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # 인증 라우터 등록
-    print("\n📝 인증 라우터 등록 중...")
-    app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
-    print("✅ 인증 라우터 등록 완료: /api/auth")
+    # 일정 관리 라우터 import 및 등록
+    try:
+        import routers.tasks as tasks
+        app.include_router(tasks.router, prefix="/api/tasks", tags=["일정관리"])
+        print("✅ 일정 관리 라우터 등록 완료: /api/tasks")
+    except Exception as e:
+        print(f"❌ tasks 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # 일정 관리 라우터 등록
-    app.include_router(tasks.router, prefix="/api/tasks", tags=["일정관리"])
-    print("✅ 일정 관리 라우터 등록 완료: /api/tasks")
+    # 약 관리 라우터 import 및 등록
+    try:
+        import routers.medicine as medicine
+        app.include_router(medicine.router, prefix="/api/medicine", tags=["약관리"])
+        print("✅ 약 관리 라우터 등록 완료: /api/medicine")
+    except Exception as e:
+        print(f"❌ medicine 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # 약 관리 라우터 등록
-    app.include_router(medicine.router, prefix="/api/medicine", tags=["약관리"])
-    print("✅ 약 관리 라우터 등록 완료: /api/medicine")
+    # 보호자 관리 라우터 import 및 등록
+    try:
+        import routers.guardians as guardians
+        app.include_router(guardians.router, prefix="/api/guardians", tags=["보호자"])
+        print("✅ 보호자 관리 라우터 등록 완료: /api/guardians")
+    except Exception as e:
+        print(f"❌ guardians 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # 보호자 관리 라우터 등록
-    app.include_router(guardians.router, prefix="/api/guardians", tags=["보호자"])
-    print("✅ 보호자 관리 라우터 등록 완료: /api/guardians")
+    # AI 라우터 import 및 등록
+    try:
+        import routers.ai as ai
+        app.include_router(ai.router, prefix="/api/ai", tags=["AI분석"])
+        print("✅ AI 라우터 등록 완료: /api/ai")
+    except Exception as e:
+        print(f"❌ ai 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # AI 라우터 등록
-    app.include_router(ai.router, prefix="/api/ai", tags=["AI분석"])
-    print("✅ AI 라우터 등록 완료: /api/ai")
+    # 알림 로그 라우터 import 및 등록
+    try:
+        import routers.notification_logs as notification_logs
+        app.include_router(notification_logs.router, prefix="/api/notification-logs", tags=["알림로그"])
+        print("✅ 알림 로그 라우터 등록 완료: /api/notification-logs")
+    except Exception as e:
+        print(f"❌ notification_logs 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     
-    # 알림 로그 라우터 등록
-    app.include_router(notification_logs.router, prefix="/api/notification-logs", tags=["알림로그"])
-    print("✅ 알림 로그 라우터 등록 완료: /api/notification-logs")
+    print("\n✅ 라우터 등록 프로세스 완료!")
     
     print("\n✅ 모든 라우터 등록 완료!")
     
@@ -337,6 +438,43 @@ except Exception as e:
     traceback.print_exc()
     print("="*60 + "\n")
     # 오류가 발생해도 서버는 계속 실행 (디버깅용)
+
+# Swagger UI에서 Bearer 토큰을 직접 입력할 수 있도록 OpenAPI 스키마 수정
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    from fastapi.openapi.utils import get_openapi
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Security scheme 추가
+    openapi_schema["components"]["securitySchemes"] = {
+        "Bearer": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT 토큰을 입력하세요. 형식: Bearer {token}"
+        }
+    }
+    
+    # 모든 엔드포인트에 security 적용 (인증이 필요한 경우)
+    # 인증이 필요하지 않은 엔드포인트는 제외
+    for path, path_item in openapi_schema["paths"].items():
+        for method, operation in path_item.items():
+            if isinstance(operation, dict) and "security" not in operation:
+                # 인증이 필요한 엔드포인트만 security 추가
+                if path.startswith("/api/") and path not in ["/api/auth/login", "/api/auth/register", "/api/auth/login-simple"]:
+                    operation["security"] = [{"Bearer": []}]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 if __name__ == "__main__":
     import uvicorn

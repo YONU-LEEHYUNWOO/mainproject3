@@ -7,7 +7,12 @@ import json
 import time
 from typing import Dict, List, Optional, Tuple
 import google.generativeai as genai
-from config import GEMINI_API_KEY, GEMINI_MODEL
+
+# 패키지 import와 직접 실행 모두 지원
+try:
+    from config import GEMINI_API_KEY, GEMINI_MODEL
+except ImportError:
+    from backend.config import GEMINI_API_KEY, GEMINI_MODEL
 
 class AIService:
     """AI 서비스 클래스"""

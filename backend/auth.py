@@ -13,9 +13,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 
-from database import get_db
-from models.user import User
-from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+# 패키지 import와 직접 실행 모두 지원
+try:
+    from database import get_db
+    from models.user import User
+    from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+except ImportError:
+    from backend.database import get_db
+    from backend.models.user import User
+    from backend.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 # 비밀번호 해싱 컨텍스트 (bcrypt 호환성 개선)
 pwd_context = CryptContext(
@@ -118,6 +124,7 @@ def verify_token(token: str) -> Optional[TokenData]:
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """현재 인증된 사용자 가져오기"""
+    print(f"🔐 [AUTH] get_current_user 호출됨, token 길이: {len(token) if token else 0}")
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="인증 정보가 유효하지 않습니다",
@@ -125,7 +132,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
 
     token_data = verify_token(token)
+    print(f"🔐 [AUTH] token 검증 결과: {token_data}")
     if token_data is None:
+        print(f"❌ [AUTH] 토큰 검증 실패")
         raise credentials_exception
 
     user = db.query(User).filter(User.username == token_data.username).first()

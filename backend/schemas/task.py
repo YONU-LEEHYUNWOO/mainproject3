@@ -3,7 +3,7 @@
 일정 CRUD를 위한 요청/응답 모델입니다.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer, model_validator
 from typing import Optional, Union
 from datetime import date, time, datetime
 
@@ -22,37 +22,16 @@ class TaskBase(BaseModel):
     category: str = Field("일반", max_length=50)
 
 class TaskCreate(BaseModel):
-    """일정 생성 스키마"""
+    """일정 생성 스키마 - 모든 날짜/시간 필드를 문자열 타입으로 정의"""
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    date: date
-    time: Optional[Union[str, time]] = None  # 문자열 또는 time 객체 허용
+    date: str  # date 객체 대신 문자열로 받음 (예: "2026-01-19")
+    time: Optional[str] = None  # time 객체 대신 문자열로 받음 (예: "19:27")
     location: Optional[str] = Field(None, max_length=255)
     priority: int = Field(2, ge=1, le=3)
     category: str = Field("일반", max_length=50)
     completed: bool = False
     reminder_minutes: int = Field(0, ge=0)
-
-    @field_validator('date', mode='before')
-    @classmethod
-    def parse_date(cls, v):
-        if isinstance(v, str):
-            return date.fromisoformat(v)
-        return v
-
-    @field_validator('time', mode='before')
-    @classmethod
-    def parse_time(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, str) and v.strip():
-            # "HH:MM" 형식의 문자열을 time 객체로 변환
-            try:
-                hour, minute = map(int, v.strip().split(':'))
-                return time(hour=hour, minute=minute)
-            except ValueError:
-                raise ValueError(f"Invalid time format: {v}")
-        return None
 
 class TaskUpdate(BaseModel):
     """일정 업데이트 스키마"""
@@ -68,12 +47,57 @@ class TaskUpdate(BaseModel):
     reminder_minutes: Optional[int] = Field(None, ge=0)
     category: Optional[str] = Field(None, max_length=50)
 
-class TaskResponse(TaskBase):
-    """일정 응답 스키마"""
+class TaskResponse(BaseModel):
+    """일정 응답 스키마 - 모든 날짜/시간 필드를 문자열 타입으로 정의"""
     id: int
+    title: str
+    description: Optional[str] = None
+    date: str  # date 객체를 문자열로 변환
+    time: Optional[str] = None  # time 객체를 문자열로 변환 (HH:MM 형식)
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    completed: bool = False
+    priority: int = Field(1, ge=1, le=3)  # 1: 낮음, 2: 보통, 3: 높음
+    reminder_minutes: int = Field(0, ge=0)  # 사전 알림 시간 (분)
+    category: str = Field("일반", max_length=50)
     owner_id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: str  # datetime 객체를 문자열로 변환
+    updated_at: str  # datetime 객체를 문자열로 변환
+
+    @field_validator('date', mode='before')
+    @classmethod
+    def convert_date(cls, v):
+        """date 객체를 문자열로 변환"""
+        if isinstance(v, date):
+            return str(v)
+        return v
+
+    @field_validator('time', mode='before')
+    @classmethod
+    def convert_time(cls, v):
+        """time 객체를 HH:MM 형식 문자열로 변환"""
+        if v is None:
+            return None
+        if isinstance(v, time):
+            return v.strftime("%H:%M")
+        return v
+
+    @field_validator('created_at', mode='before')
+    @classmethod
+    def convert_created_at(cls, v):
+        """datetime 객체를 ISO 형식 문자열로 변환"""
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
+
+    @field_validator('updated_at', mode='before')
+    @classmethod
+    def convert_updated_at(cls, v):
+        """datetime 객체를 ISO 형식 문자열로 변환"""
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
 
     class Config:
         from_attributes = True

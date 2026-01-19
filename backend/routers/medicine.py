@@ -16,10 +16,11 @@ from schemas.medicine_alarm import (
     MedicineAlarmCreate, MedicineAlarmUpdate, MedicineAlarmResponse,
     MedicineAlarmListResponse, MedicineTakenRequest, MedicineTakenResponse
 )
+from utils.response import success_response
 
 router = APIRouter()
 
-@router.get("/alarms", response_model=MedicineAlarmListResponse)
+@router.get("/alarms")
 async def get_medicine_alarms(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -29,12 +30,16 @@ async def get_medicine_alarms(
     현재 사용자의 모든 약 알림을 조회합니다.
     """
     alarms = db.query(MedicineAlarm).filter(MedicineAlarm.user_id == current_user.id).all()
-    return MedicineAlarmListResponse(
-        alarms=[MedicineAlarmResponse.model_validate(alarm) for alarm in alarms],
-        total=len(alarms)
+    
+    return success_response(
+        data={
+            "alarms": [MedicineAlarmResponse.model_validate(alarm).dict() for alarm in alarms],
+            "total": len(alarms)
+        },
+        message="성공"
     )
 
-@router.post("/alarms", response_model=MedicineAlarmResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/alarms", status_code=status.HTTP_201_CREATED)
 async def create_medicine_alarm(
     alarm: MedicineAlarmCreate,
     current_user: User = Depends(get_current_user),
@@ -61,9 +66,14 @@ async def create_medicine_alarm(
     db.add(db_alarm)
     db.commit()
     db.refresh(db_alarm)
-    return MedicineAlarmResponse.model_validate(db_alarm)
+    
+    return success_response(
+        data=MedicineAlarmResponse.model_validate(db_alarm).dict(),
+        message="약 알림이 생성되었습니다",
+        status_code=status.HTTP_201_CREATED
+    )
 
-@router.get("/alarms/{alarm_id}", response_model=MedicineAlarmResponse)
+@router.get("/alarms/{alarm_id}")
 async def get_medicine_alarm(
     alarm_id: int,
     current_user: User = Depends(get_current_user),
@@ -83,9 +93,12 @@ async def get_medicine_alarm(
             detail="약 알림을 찾을 수 없습니다"
         )
 
-    return MedicineAlarmResponse.model_validate(alarm)
+    return success_response(
+        data=MedicineAlarmResponse.model_validate(alarm).dict(),
+        message="성공"
+    )
 
-@router.put("/alarms/{alarm_id}", response_model=MedicineAlarmResponse)
+@router.put("/alarms/{alarm_id}")
 async def update_medicine_alarm(
     alarm_id: int,
     alarm_update: MedicineAlarmUpdate,
@@ -131,7 +144,11 @@ async def update_medicine_alarm(
 
     db.commit()
     db.refresh(alarm)
-    return MedicineAlarmResponse.model_validate(alarm)
+    
+    return success_response(
+        data=MedicineAlarmResponse.model_validate(alarm).dict(),
+        message="약 알림이 수정되었습니다"
+    )
 
 @router.delete("/alarms/{alarm_id}")
 async def delete_medicine_alarm(
@@ -155,9 +172,13 @@ async def delete_medicine_alarm(
 
     db.delete(alarm)
     db.commit()
-    return {"message": "약 알림이 삭제되었습니다"}
+    
+    return success_response(
+        data=None,
+        message="약 알림이 삭제되었습니다"
+    )
 
-@router.post("/taken", response_model=MedicineTakenResponse)
+@router.post("/taken")
 async def mark_medicine_taken(
     request: MedicineTakenRequest,
     current_user: User = Depends(get_current_user),
@@ -187,10 +208,13 @@ async def mark_medicine_taken(
     alarm.mark_taken()
     db.commit()
 
-    return MedicineTakenResponse(
-        success=True,
-        message="약 복용이 기록되었습니다",
-        next_reminder=alarm.next_reminder
+    return success_response(
+        data={
+            "id": alarm.id,
+            "last_taken": alarm.last_taken.isoformat() if alarm.last_taken else None,
+            "next_reminder": alarm.next_reminder.isoformat() if alarm.next_reminder else None
+        },
+        message="약 복용이 기록되었습니다"
     )
 
 @router.get("/today")
@@ -216,20 +240,36 @@ async def get_today_medicine_alarms(
     for alarm in alarms:
         times = alarm.get_times()
         if times:  # 복용 시간이 설정된 경우만
+            # time_1, time_2, time_3, time_4 추출
+            time_list = [t.strftime("%H:%M") if t else None for t in times]
+            # 최대 4개 시간까지 지원
+            while len(time_list) < 4:
+                time_list.append(None)
+            
             today_alarms.append({
                 "id": alarm.id,
                 "medicine_name": alarm.medicine_name,
                 "dosage": alarm.dosage,
-                "times": [t.strftime("%H:%M") for t in times],
-                "instructions": alarm.instructions,
-                "last_taken": alarm.last_taken,
-                "next_reminder": alarm.next_reminder
+                "time_1": time_list[0],
+                "time_2": time_list[1] if len(time_list) > 1 else None,
+                "time_3": time_list[2] if len(time_list) > 2 else None,
+                "time_4": time_list[3] if len(time_list) > 3 else None,
+                "last_taken": alarm.last_taken.isoformat() if alarm.last_taken else None,
+                "next_reminder": alarm.next_reminder.isoformat() if alarm.next_reminder else None,
+                "is_taken": False,  # TODO: 복용 완료 여부 로직 추가 필요
+                "is_active": alarm.is_active
             })
+    
+    # time_1 기준으로 정렬
+    today_alarms.sort(key=lambda x: x["time_1"] or "99:99")
 
-    return {
-        "today_alarms": today_alarms,
-        "total": len(today_alarms)
-    }
+    return success_response(
+        data={
+            "alarms": today_alarms,
+            "total": len(today_alarms)
+        },
+        message="성공"
+    )
 
 @router.get("/due-now")
 async def get_due_medicine_alarms(
@@ -266,10 +306,13 @@ async def get_due_medicine_alarms(
                     })
                     break
 
-    return {
-        "due_alarms": sorted(due_alarms, key=lambda x: x["minutes_until"]),
-        "total": len(due_alarms)
-    }
+    return success_response(
+        data={
+            "due_alarms": sorted(due_alarms, key=lambda x: x["minutes_until"]),
+            "total": len(due_alarms)
+        },
+        message="성공"
+    )
 
 @router.patch("/alarms/{alarm_id}/toggle")
 async def toggle_medicine_alarm(
@@ -300,4 +343,7 @@ async def toggle_medicine_alarm(
     db.commit()
     db.refresh(alarm)
 
-    return MedicineAlarmResponse.model_validate(alarm)
+    return success_response(
+        data=MedicineAlarmResponse.model_validate(alarm).dict(),
+        message="약 알림이 활성화되었습니다" if alarm.is_active else "약 알림이 비활성화되었습니다"
+    )
