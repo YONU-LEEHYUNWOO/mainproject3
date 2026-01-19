@@ -1,0 +1,27 @@
+# FastAPI 및 핵심 의존성
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# 데이터베이스
+sqlalchemy==2.0.36
+alembic==1.14.0
+
+# 인증
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20
+
+# 환경 변수 관리
+python-decouple==3.8
+
+# AI API 연동
+google-genai==1.59.0
+
+# CORS 및 추가 유틸리티
+
+# 이메일 검증
+email-validator==2.2.0
+
+# 개발용
+pytest==8.3.4
+httpx==0.28.1
