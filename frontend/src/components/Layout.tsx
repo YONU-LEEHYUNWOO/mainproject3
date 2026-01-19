@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { ConnectionStatus } from './ConnectionStatus'
 import {
   Calendar,
   MessageSquare,
@@ -9,7 +10,9 @@ import {
   LogOut,
   Home,
   BarChart3,
-  MapPin
+  MapPin,
+  Activity,
+  Heart
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -27,6 +30,8 @@ const Layout = ({ mode }: LayoutProps) => {
     { name: '일정관리', href: '/parent/tasks', icon: Calendar },
     { name: 'AI 채팅', href: '/parent/chat', icon: MessageSquare },
     { name: '약 관리', href: '/parent/medicine', icon: Pill },
+    { name: '위치', href: '/parent/location', icon: MapPin },
+    { name: '건강', href: '/parent/health', icon: Heart },
     { name: '설정', href: '/parent/settings', icon: Settings },
   ] : [
     { name: '대시보드', href: '/child/dashboard', icon: BarChart3 },
@@ -34,6 +39,8 @@ const Layout = ({ mode }: LayoutProps) => {
     { name: 'AI 채팅', href: '/child/chat', icon: MessageSquare },
     { name: '보호자', href: '/child/guardians', icon: Users },
     { name: '약 관리', href: '/child/medicine', icon: Pill },
+    { name: '위치', href: '/child/location', icon: MapPin },
+    { name: '모니터링', href: '/child/monitoring', icon: Activity },
     { name: '설정', href: '/child/settings', icon: Settings },
   ]
 
@@ -72,6 +79,10 @@ const Layout = ({ mode }: LayoutProps) => {
                 {user?.full_name || user?.username}
               </p>
               <p className="text-xs text-gray-500">{user?.email}</p>
+              {/* WebSocket 연결 상태 (향후 구현) */}
+              {/* <div className="mt-2">
+                <ConnectionStatus isConnected={false} />
+              </div> */}
             </div>
 
             {/* 네비게이션 메뉴 */}

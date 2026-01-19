@@ -48,21 +48,61 @@ api.interceptors.response.use(
       return Promise.reject(new Error('네트워크 오류가 발생했습니다.'))
     }
     
+    // 401 인증 오류 처리
     if (error.response?.status === 401) {
-      // 인증 오류 시 토큰 제거 및 로그인 페이지로 리다이렉트
       localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+      // 현재 페이지가 로그인 페이지가 아닐 때만 리다이렉트
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login'
+      }
+      return Promise.reject(new Error('인증이 만료되었습니다. 다시 로그인해주세요.'))
     }
     
-    // 상세한 오류 메시지 전달
-    const errorMessage = error.response?.data?.detail || error.message || '알 수 없는 오류가 발생했습니다.'
+    // 403 권한 오류 처리
+    if (error.response?.status === 403) {
+      return Promise.reject(new Error('접근 권한이 없습니다.'))
+    }
+    
+    // 404 리소스 없음 처리
+    if (error.response?.status === 404) {
+      return Promise.reject(new Error('요청한 리소스를 찾을 수 없습니다.'))
+    }
+    
+    // 422 유효성 검사 오류 처리
+    if (error.response?.status === 422) {
+      const detail = error.response.data?.detail
+      let errorMessage = '입력한 데이터가 올바르지 않습니다.'
+      
+      if (Array.isArray(detail)) {
+        errorMessage = detail.map((err: any) => {
+          const field = err.loc?.join('.') || '알 수 없는 필드'
+          return `${field}: ${err.msg}`
+        }).join(', ')
+      } else if (typeof detail === 'string') {
+        errorMessage = detail
+      }
+      
+      return Promise.reject(new Error(errorMessage))
+    }
+    
+    // 500 서버 오류 처리
+    if (error.response?.status >= 500) {
+      return Promise.reject(new Error('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'))
+    }
+    
+    // 기타 오류 처리
+    const errorMessage = error.response?.data?.message || 
+                        error.response?.data?.detail || 
+                        error.message || 
+                        '알 수 없는 오류가 발생했습니다.'
+    
     console.error('API 오류:', {
       status: error.response?.status,
       message: errorMessage,
       data: error.response?.data
     })
     
-    return Promise.reject(error)
+    return Promise.reject(new Error(errorMessage))
   }
 )
 

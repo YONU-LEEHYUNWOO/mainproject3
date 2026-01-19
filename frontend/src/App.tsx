@@ -7,6 +7,9 @@ import Tasks from './pages/Tasks'
 import Chat from './pages/Chat'
 import Guardians from './pages/Guardians'
 import Medicine from './pages/Medicine'
+import Location from './pages/Location'
+import Monitoring from './pages/Monitoring'
+import Health from './pages/Health'
 import Settings from './pages/Settings'
 import ModeSelector from './pages/ModeSelector'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -36,6 +39,8 @@ function App() {
           <Route path="tasks" element={<Tasks />} />
           <Route path="chat" element={<Chat />} />
           <Route path="medicine" element={<Medicine />} />
+          <Route path="location" element={<Location />} />
+          <Route path="health" element={<Health />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
@@ -51,6 +56,8 @@ function App() {
           <Route path="chat" element={<Chat />} />
           <Route path="guardians" element={<Guardians />} />
           <Route path="medicine" element={<Medicine />} />
+          <Route path="location" element={<Location />} />
+          <Route path="monitoring" element={<Monitoring />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

@@ -5,7 +5,10 @@ import { MedicineItem } from '../components/MedicineItem'
 import { MedicineStats } from '../components/MedicineStats'
 import { MedicineAlarmForm } from '../components/MedicineAlarmForm'
 import { MedicineAlarmCard } from '../components/MedicineAlarmCard'
-import { Loader2, Pill, Plus } from 'lucide-react'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
+import { EmptyState } from '../components/EmptyState'
+import { Pill, Plus } from 'lucide-react'
 
 interface MedicineAlarm {
   id: number
@@ -321,28 +324,22 @@ const Medicine = () => {
           <div className="bg-white shadow rounded-lg">
             <div className="p-6">
               {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                  <span className="ml-3 text-gray-600">약 알림 목록을 불러오는 중...</span>
-                </div>
+                <LoadingSpinner size="lg" text="약 알림 목록을 불러오는 중..." />
               ) : error ? (
-                <div className="text-center py-12">
-                  <p className="text-red-600 mb-4">{error}</p>
-                  <button
-                    onClick={loadAlarms}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                  >
-                    다시 시도
-                  </button>
-                </div>
+                <ErrorMessage
+                  message={error}
+                  onRetry={loadAlarms}
+                />
               ) : !Array.isArray(alarms) || alarms.length === 0 ? (
-                <div className="text-center py-12">
-                  <Pill className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">등록된 약 알림이 없습니다</h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    부모님의 약 복용 알림을 등록해주세요.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Pill}
+                  title="등록된 약 알림이 없습니다"
+                  description="부모님의 약 복용 알림을 등록해주세요."
+                  action={{
+                    label: '약 알림 등록',
+                    onClick: () => setIsFormOpen(true)
+                  }}
+                />
               ) : (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">등록된 약 알림</h3>

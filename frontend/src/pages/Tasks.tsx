@@ -5,6 +5,8 @@ import { Calendar, Plus, List, Bell, BellOff } from 'lucide-react'
 import { CalendarView } from '../components/CalendarView'
 import { TaskForm } from '../components/TaskForm'
 import { TaskItem } from '../components/TaskItem'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { EmptyState } from '../components/EmptyState'
 import { useNotifications } from '../hooks/useNotifications'
 
 interface Task {
@@ -159,7 +161,7 @@ const Tasks = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="spinner"></div>
+        <LoadingSpinner size="lg" text="일정을 불러오는 중..." />
       </div>
     )
   }
@@ -293,11 +295,15 @@ const Tasks = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-4">전체 일정</h3>
 
             {filteredTasks.length === 0 ? (
-              <div className="text-center py-8">
-                <List className="mx-auto h-8 w-8 text-gray-400" />
-                <h4 className="mt-2 text-sm font-medium text-gray-900">일정이 없습니다</h4>
-                <p className="mt-1 text-sm text-gray-500">새로운 일정을 추가해보세요.</p>
-              </div>
+              <EmptyState
+                icon={List}
+                title="일정이 없습니다"
+                description="새로운 일정을 추가해보세요."
+                action={{
+                  label: '일정 추가',
+                  onClick: handleNewTask
+                }}
+              />
             ) : (
               <div className="space-y-3">
                 {filteredTasks.map((task) => (

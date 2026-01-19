@@ -12,7 +12,7 @@
 
 ## 🎯 Phase 1: 기본 기능 완성 (우선순위: 최고)
 
-### ✅ Step 1-1: 일정 완료 토글 API 수정
+### ✅ Step 1-1: 일정 완료 토글 API 수정git b
 **파일**: `backend/routers/tasks.py`
 
 - [ ] **CORS 설정 확인**
