@@ -10,12 +10,70 @@
 
 ---
 
+## ⚠️ 최우선 작업: API 응답 형식 통일 (모든 Phase 시작 전 필수)
+
+### ✅ 공통-0: API 응답 형식 통일 (최우선)
+**파일**: 모든 라우터 파일
+**우선순위**: 최우선 (Phase 1 시작 전 완료 권장)
+
+- [ ] **성공 응답 형식 통일**
+  ```python
+  # 모든 성공 응답은 다음 형식 사용
+  {
+      "status": 200,
+      "message": "성공 메시지",
+      "data": {...}  # 실제 데이터
+  }
+  ```
+
+- [ ] **에러 응답 형식 통일**
+  ```python
+  # 422 유효성 검사 오류 (Pydantic 기본 형식)
+  {
+      "detail": [
+          {
+              "loc": ["field_name"],
+              "msg": "에러 메시지",
+              "type": "error_type"
+          }
+      ]
+  }
+  
+  # 기타 에러 (HTTPException 사용)
+  HTTPException(
+      status_code=400/404/500,
+      detail="에러 메시지"
+  )
+  ```
+
+- [ ] **CORS 설정 강화** (`main.py`)
+  ```python
+  from fastapi.middleware.cors import CORSMiddleware
+  
+  app.add_middleware(
+      CORSMiddleware,
+      allow_origins=["http://localhost:5173", "http://localhost:3000"],  # 프론트엔드 URL
+      allow_credentials=True,
+      allow_methods=["*"],  # GET, POST, PUT, PATCH, DELETE, OPTIONS 모두 허용
+      allow_headers=["*"],
+  )
+  ```
+
+- [ ] **모든 기존 API 응답 형식 점검 및 수정**
+  - 기존 API들의 응답 형식 확인
+  - 필요 시 수정
+
+**예상 소요 시간**: 2-3시간
+**⚠️ 중요**: 이 작업을 먼저 완료하면 이후 모든 API 개발이 일관성 있게 진행됩니다.
+
+---
+
 ## 🎯 Phase 1: 기본 기능 완성 (우선순위: 최고)
 
-### ✅ Step 1-1: 일정 완료 토글 API 수정git b
+### ✅ Step 1-1: 일정 완료 토글 API 수정
 **파일**: `backend/routers/tasks.py`
 
-- [ ] **CORS 설정 확인**
+- [ ] **CORS 설정 확인** (공통-0에서 이미 설정했다면 확인만)
   - `PATCH` 메서드 허용 확인
   - `OPTIONS` preflight 요청 처리 확인
   - `main.py`의 CORSMiddleware 설정 확인
@@ -143,9 +201,33 @@
 **현재 상태**: 기본 CRUD는 구현됨, 다음 기능 추가 필요
 
 - [ ] **오늘의 약 알림 API 개선**
-  - `GET /api/medicine/alarms/today` 응답 형식 개선
-  - 복용 시간별 정렬
-  - 복용 완료 여부 포함
+  - `GET /api/medicine/today` 또는 `GET /api/medicine/alarms/today` 응답 형식 개선
+  - **응답 형식 (프론트엔드 기대 형식)**:
+    ```python
+    {
+        "status": 200,
+        "message": "성공",
+        "data": {
+            "alarms": [
+                {
+                    "id": 1,
+                    "medicine_name": "혈압약",
+                    "dosage": "1정",
+                    "time_1": "09:00",
+                    "time_2": "21:00",
+                    "time_3": null,
+                    "time_4": null,
+                    "last_taken": "2025-01-19T09:05:00",
+                    "next_reminder": "2025-01-19T21:00:00",
+                    "is_taken": false,
+                    "is_active": true
+                }
+            ]
+        }
+    }
+    ```
+  - 복용 시간별 정렬 (time_1 기준)
+  - 복용 완료 여부 포함 (`is_taken` 필드)
 
 - [ ] **복용 완료 기록 API 개선**
   - `POST /api/medicine/taken` 응답 형식 개선
@@ -212,6 +294,33 @@
 
 ### ✅ Step 1-5: 알림 설정 API
 **파일**: `backend/routers/auth.py` 또는 `backend/routers/users.py` (새 파일)
+**우선순위**: Phase 1과 병행 가능
+
+- [ ] **알림 로그 조회 API** (프론트엔드 Settings 페이지에서 사용 가능)
+  ```python
+  @router.get("/notification-logs")
+  async def get_notification_logs(
+      limit: int = Query(10, ge=1, le=100),
+      skip: int = Query(0, ge=0),
+      current_user: User = Depends(get_current_user),
+      db: Session = Depends(get_db)
+  ):
+      """
+      알림 로그 조회 (최근 알림 이력)
+      """
+      logs = db.query(NotificationLog).filter(
+          NotificationLog.user_id == current_user.id
+      ).order_by(NotificationLog.created_at.desc()).offset(skip).limit(limit).all()
+      
+      return {
+          "status": 200,
+          "message": "성공",
+          "data": {
+              "logs": [NotificationLogResponse.from_orm(log) for log in logs],
+              "total": len(logs)
+          }
+      }
+  ```
 
 - [ ] **알림 설정 조회**
   ```python
@@ -325,6 +434,7 @@
 - [ ] **데이터베이스 모델 생성**
   - `Location` 모델 생성
   - `SafeZone` 모델 생성
+  - `users` 테이블에 `location_sharing_enabled` 컬럼 추가
 
 - [ ] **테스트**
   - 모든 API 테스트
@@ -559,20 +669,38 @@
 
 - [ ] **WebSocket 엔드포인트 설정**
   ```python
-  from fastapi import WebSocket
+  from fastapi import WebSocket, WebSocketDisconnect
   
   @router.websocket("/ws/{user_id}")
   async def websocket_endpoint(
       websocket: WebSocket,
-      user_id: int
+      user_id: int,
+      token: str = Query(...)  # JWT 토큰으로 인증
   ):
       """
       WebSocket 연결
+      프론트엔드 연결 URL: ws://localhost:8000/ws/{user_id}?token={jwt_token}
       """
+      # 토큰 검증
+      # 사용자 인증 확인
+      
       await websocket.accept()
       # 연결 관리
       # 메시지 수신/전송
+      
+      try:
+          while True:
+              data = await websocket.receive_text()
+              # 메시지 처리
+      except WebSocketDisconnect:
+          # 연결 해제 처리
+          pass
   ```
+  
+- [ ] **환경 변수 설정**
+  - 프론트엔드에서 사용할 WebSocket URL 명시
+  - 개발: `ws://localhost:8000/ws`
+  - 프로덕션: `wss://your-domain.com/ws`
 
 - [ ] **실시간 알림 전송**
   - 약 알림 시간 도래 시 WebSocket으로 전송
@@ -604,18 +732,42 @@
 
 ## 📝 공통 작업
 
-### ✅ 공통-1: API 응답 형식 통일
-**파일**: 모든 라우터 파일
+### ✅ 공통-1: 부모/자식 모드 구분 API
+**파일**: 관련 라우터 파일들
 
-- [ ] **응답 형식 통일**
-  - 성공: `{status: 200, message: "...", data: {...}}`
-  - 실패: `{status: 400/404/500, message: "...", data: null}`
+- [ ] **모드별 권한 확인 로직**
+  - 부모 모드: 자신의 데이터만 조회/수정
+  - 자식 모드: 부모님 데이터 조회 (읽기 전용 또는 제한된 수정)
+  
+- [ ] **보호자 관계 확인 헬퍼 함수**
+  ```python
+  def verify_guardian_relationship(
+      guardian_id: int,  # 자식 ID
+      parent_id: int,    # 부모 ID
+      db: Session
+  ) -> bool:
+      """
+      보호자 관계 확인
+      """
+      guardian = db.query(Guardian).filter(
+          and_(
+              Guardian.guardian_id == guardian_id,
+              Guardian.parent_id == parent_id,
+              Guardian.is_active == True
+          )
+      ).first()
+      return guardian is not None
+  ```
 
-- [ ] **에러 처리 개선**
-  - 모든 엔드포인트에 일관된 에러 처리
-  - 적절한 HTTP 상태 코드 사용
+- [ ] **자식 모드에서 부모님 데이터 조회 시 권한 확인**
+  - 약 알림 조회: `GET /api/medicine/alarms?parent_id={parent_id}`
+  - 일정 조회: `GET /api/tasks?parent_id={parent_id}` (필요 시)
 
-**예상 소요 시간**: 3-4시간
+**예상 소요 시간**: 2-3시간
+
+---
+
+### ✅ 공통-2: Swagger 문서화
 
 ---
 
@@ -635,7 +787,7 @@
 
 ---
 
-### ✅ 공통-3: 데이터베이스 마이그레이션
+### ✅ 공통-4: 데이터베이스 마이그레이션
 **파일**: `backend/database.py`, Alembic 마이그레이션
 
 - [ ] **필요한 테이블 생성**
@@ -657,12 +809,17 @@
 
 ## ✅ 통합 체크리스트
 
-### Phase 1 완료 전 확인
+### Phase 1 시작 전 확인 (최우선)
+- [ ] **공통-0: API 응답 형식 통일 완료** ⚠️ 필수
 - [ ] CORS 설정 확인 (모든 메서드 허용)
+- [ ] 기본 에러 처리 로직 구현
+
+### Phase 1 완료 전 확인
 - [ ] 모든 엔드포인트 Swagger 문서화
-- [ ] 에러 응답 형식 통일
+- [ ] 에러 응답 형식 통일 확인
 - [ ] 데이터베이스 마이그레이션 완료
 - [ ] 작업자 A와 API 연동 테스트
+- [ ] 약 알림 API 응답 형식 확인 (프론트엔드와 일치)
 
 ### Phase 2 완료 전 확인
 - [ ] 카카오 지도 API 키 설정 확인
@@ -712,5 +869,28 @@
 
 ---
 
+---
+
+## 📌 프론트엔드 연동 참고사항
+
+### 프론트엔드에서 이미 구현된 기능
+1. **일정 완료 토글**: `TaskItem` 컴포넌트에서 `PATCH /api/tasks/{id}/complete` 호출
+2. **약 알림 CRUD**: `Medicine.tsx`에서 약 알림 관리
+3. **위치 페이지**: `Location.tsx`에서 위치 추적 및 지도 표시
+4. **알림 설정**: `Settings.tsx`에서 알림 설정 관리
+5. **WebSocket 훅**: `useWebSocket.ts`에서 실시간 연결 관리
+
+### 프론트엔드에서 기대하는 API 응답 형식
+- **성공**: `{status: 200, message: "...", data: {...}}`
+- **422 에러**: Pydantic 기본 형식 `{detail: [{loc: [...], msg: "...", type: "..."}]}`
+- **기타 에러**: HTTP 상태 코드와 `detail` 필드
+
+### 환경 변수 (프론트엔드)
+- `VITE_API_BASE_URL`: 백엔드 API URL (예: `http://localhost:8000`)
+- `VITE_WS_URL`: WebSocket URL (예: `ws://localhost:8000/ws`)
+
+---
+
 **작성일**: 2025-01-19  
-**최종 수정**: 2025-01-19
+**최종 수정**: 2025-01-19  
+**업데이트**: 프론트엔드 연동 사항 추가 및 우선순위 조정
