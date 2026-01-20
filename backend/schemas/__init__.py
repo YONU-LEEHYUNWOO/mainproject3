@@ -8,6 +8,7 @@ from .task import *
 from .chat_message import *
 from .ai_conversation import *
 from .guardian import *
+from .location import *
 from .medicine_alarm import *
 from .auth import *
 
@@ -31,6 +32,9 @@ __all__ = [
 
     # Guardian schemas
     "GuardianBase", "GuardianCreate", "GuardianUpdate", "GuardianResponse",
+
+    # Location schemas
+    "LocationBase", "LocationCreate", "LocationUpdate", "LocationResponse", "LocationListResponse",
 
     # Medicine schemas
     "MedicineAlarmBase", "MedicineAlarmCreate", "MedicineAlarmUpdate", "MedicineAlarmResponse"

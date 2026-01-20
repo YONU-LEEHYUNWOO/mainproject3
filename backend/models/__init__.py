@@ -9,6 +9,7 @@ from .task import Task
 from .chat_message import ChatMessage
 from .ai_conversation import AIConversation
 from .guardian import Guardian
+from .location import Location
 from .medicine import Medicine
 from .medicine_alarm import MedicineAlarm
 from .notification_log import NotificationLog
@@ -21,6 +22,7 @@ __all__ = [
     "ChatMessage",
     "AIConversation",
     "Guardian",
+    "Location",
     "Medicine",
     "MedicineAlarm",
     "NotificationLog"

@@ -45,7 +45,7 @@ HOST = config("HOST", default="0.0.0.0")
 PORT = config("PORT", default=8000, cast=int)
 
 # CORS 설정
-ALLOWED_ORIGINS = config("ALLOWED_ORIGINS", default="http://localhost:3000,http://localhost:5173").split(",")
+ALLOWED_ORIGINS = config("ALLOWED_ORIGINS", default="http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176").split(",")
 
 # Redis 설정 (선택, 캐싱용)
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379")

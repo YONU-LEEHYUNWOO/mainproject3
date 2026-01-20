@@ -172,7 +172,7 @@ def get_db():
         
         yield db
     except Exception as e:
-        print(f"❌ 데이터베이스 세션 생성 오류: {e}")
+        print(f"[DB] 데이터베이스 세션 생성 오류: {e}")
         import traceback
         traceback.print_exc()
         if db:
@@ -196,24 +196,24 @@ def create_tables():
                 User, Task, ChatMessage, AIConversation,
                 Guardian, Medicine, MedicineAlarm, NotificationLog
             )
-        print(f"📊 테이블 생성 시작...")
-        print(f"📊 등록된 테이블: {list(Base.metadata.tables.keys())}")
-        
+        print(f"[DB] 테이블 생성 시작...")
+        print(f"[DB] 등록된 테이블: {list(Base.metadata.tables.keys())}")
+
         # 테이블 생성
         Base.metadata.create_all(bind=engine)
-        
+
         # 생성된 테이블 확인
         from sqlalchemy import inspect
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
-        print(f"✅ 생성된 테이블: {existing_tables}")
-        
+        print(f"[DB] 생성된 테이블: {existing_tables}")
+
         if 'users' not in existing_tables:
-            print("⚠️ 경고: users 테이블이 생성되지 않았습니다!")
+            print("[DB] 경고: users 테이블이 생성되지 않았습니다!")
             raise Exception("users 테이블 생성 실패")
-            
+
     except Exception as e:
-        print(f"❌ 테이블 생성 오류: {e}")
+        print(f"[DB] 테이블 생성 오류: {e}")
         import traceback
         traceback.print_exc()
         raise

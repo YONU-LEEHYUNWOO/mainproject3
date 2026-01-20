@@ -28,7 +28,7 @@ async def test_tasks_endpoint():
     """테스트 엔드포인트 - 서버 연결 확인용"""
     import sys
     print("=" * 60, file=sys.stderr)
-    print("✅ [TEST] /api/tasks/test 엔드포인트 호출됨", file=sys.stderr)
+    print("[TEST] /api/tasks/test 엔드포인트 호출됨", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
     sys.stderr.flush()
     return {"message": "Tasks API 서버 연결 성공", "status": "ok"}

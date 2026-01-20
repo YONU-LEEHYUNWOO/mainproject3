@@ -32,29 +32,29 @@ async def login_for_access_token(
     사용자명과 비밀번호로 인증하여 JWT 토큰을 발급합니다.
     """
     try:
-        print(f"📥 로그인 요청: username={credentials.username}")
-        
+        print(f"[LOGIN] 로그인 요청: username={credentials.username}")
+
         # 사용자 인증
         try:
             user = authenticate_user(db, credentials.username, credentials.password)
         except Exception as auth_error:
-            print(f"❌ 인증 중 오류: {type(auth_error).__name__}: {str(auth_error)}")
+            print(f"[LOGIN] 인증 중 오류: {type(auth_error).__name__}: {str(auth_error)}")
             import traceback
             traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"인증 처리 중 오류가 발생했습니다: {str(auth_error)}"
             )
-        
+
         if not user:
-            print(f"❌ 인증 실패: username={credentials.username}")
+            print(f"[LOGIN] 인증 실패: username={credentials.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="잘못된 사용자명 또는 비밀번호입니다",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        print(f"✅ 인증 성공: user_id={user.id}, username={user.username}")
+        print(f"[LOGIN] 인증 성공: user_id={user.id}, username={user.username}")
 
         # 마지막 로그인 시간 업데이트
         try:

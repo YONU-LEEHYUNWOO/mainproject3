@@ -4,7 +4,7 @@
 """
 
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 
 class GuardianBase(BaseModel):
@@ -12,7 +12,8 @@ class GuardianBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[EmailStr] = None
-    relationship: str = Field(..., max_length=50)  # 가족관계
+    relationship: Optional[str] = Field(None, max_length=50, validation_alias="relationship_type", serialization_alias="relationship")  # 가족관계
+    guardian_user_id: Optional[int] = None  # 보호자 User ID
     is_primary: bool = False
     emergency_contact: bool = False
     notification_enabled: bool = True
@@ -28,6 +29,7 @@ class GuardianUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[EmailStr] = None
     relationship: Optional[str] = Field(None, max_length=50)
+    guardian_user_id: Optional[int] = None
     is_primary: Optional[bool] = None
     emergency_contact: Optional[bool] = None
     notification_enabled: Optional[bool] = None
@@ -37,8 +39,9 @@ class GuardianResponse(GuardianBase):
     """보호자 응답 스키마"""
     id: int
     user_id: int
-    created_at: datetime
-    updated_at: datetime
+    guardian_user_id: Optional[int] = None
+    created_at: Union[datetime, str]
+    updated_at: Union[datetime, str]
 
     class Config:
         from_attributes = True

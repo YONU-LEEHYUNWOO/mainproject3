@@ -26,6 +26,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
+    location_sharing_enabled: Optional[bool] = None
 
 class UserInDB(UserBase):
     """데이터베이스 내 사용자 스키마"""
@@ -43,6 +44,8 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime] = None
+    location_sharing_enabled: bool = False
+
 
     class Config:
         from_attributes = True

@@ -17,7 +17,7 @@ from schemas.guardian import (
 
 router = APIRouter()
 
-@router.get("/", response_model=GuardianListResponse)
+@router.get("/")
 async def get_guardians(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -26,11 +26,39 @@ async def get_guardians(
     보호자 목록 조회
     현재 사용자의 모든 보호자를 조회합니다.
     """
-    guardians = db.query(Guardian).filter(Guardian.user_id == current_user.id).all()
-    return GuardianListResponse(
-        guardians=[GuardianResponse.from_orm(guardian) for guardian in guardians],
-        total=len(guardians)
-    )
+    try:
+        print(f"DEBUG: get_guardians 호출됨 (UPDATED). user_id={current_user.id}")
+        guardians = db.query(Guardian).filter(Guardian.user_id == current_user.id).all()
+        print(f"DEBUG: 조회된 guardians 개수: {len(guardians)}")
+        
+        result = []
+        for g in guardians:
+            print(f"DEBUG: Processing guardian {g.id}")
+            result.append({
+                "id": g.id,
+                "name": g.name,
+                "phone": g.phone,
+                "email": g.email,
+                "relationship": g.relationship_type, # 명시적 매핑
+                "is_primary": g.is_primary,
+                "emergency_contact": g.emergency_contact,
+                "notification_enabled": g.notification_enabled,
+                "access_level": g.access_level,
+                "user_id": g.user_id,
+                "guardian_user_id": g.guardian_user_id,
+                "created_at": str(g.created_at),
+                "updated_at": str(g.updated_at)
+            })
+            
+        print(f"DEBUG: returning {len(result)} items")
+        # Pydantic 모델 검증 우회하여 딕셔너리 직접 반환
+        return {
+            "guardians": result,
+            "total": len(result)
+        }
+    except Exception as e:
+        print(f"ERROR in get_guardians: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/", response_model=GuardianResponse, status_code=status.HTTP_201_CREATED)
 async def create_guardian(

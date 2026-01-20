@@ -6,6 +6,7 @@ Google Gemini AI를 활용한 텍스트 분석, 일정 추출, 채팅 기능을 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import json
+from typing import List, Dict, Optional
 
 from database import get_db
 from auth import get_current_user
@@ -23,6 +24,148 @@ router = APIRouter()
 
 # AI 서비스 인스턴스
 ai_service = AIService()
+
+def _check_schedule_conflicts(extracted_tasks: List[Dict], user_id: int, db: Session) -> List[Dict]:
+    """
+    추출된 일정과 기존 일정 간 충돌 감지
+
+    Args:
+        extracted_tasks: AI가 추출한 일정 목록
+        user_id: 사용자 ID
+        db: 데이터베이스 세션
+
+    Returns:
+        충돌 정보 목록
+    """
+    from models.task import Task
+    from datetime import datetime, date, time
+
+    conflicts = []
+
+    for extracted_task in extracted_tasks:
+        try:
+            # 추출된 일정의 날짜/시간 파싱
+            task_date_str = extracted_task.get("date")
+            task_time_str = extracted_task.get("time")
+
+            if not task_date_str:
+                continue
+
+            # 날짜 파싱
+            try:
+                task_date = datetime.strptime(task_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+
+            # 시간 파싱 (없으면 하루 종일로 간주)
+            task_time = None
+            if task_time_str:
+                try:
+                    # HH:MM 형식 파싱
+                    hour, minute = map(int, task_time_str.split(':'))
+                    task_time = time(hour=hour, minute=minute)
+                except (ValueError, AttributeError):
+                    pass
+
+            # 기존 일정 조회 (같은 날짜)
+            existing_tasks = db.query(Task).filter(
+                Task.owner_id == user_id,
+                Task.date == task_date
+            ).all()
+
+            # 각 기존 일정과 충돌 확인
+            for existing_task in existing_tasks:
+                conflict_info = _check_time_overlap(
+                    extracted_task, existing_task, task_time
+                )
+                if conflict_info:
+                    conflicts.append(conflict_info)
+
+        except Exception as e:
+            # 개별 일정 처리 오류는 무시하고 계속 진행
+            continue
+
+    return conflicts
+
+def _check_time_overlap(extracted_task: Dict, existing_task, extracted_time) -> Optional[Dict]:
+    """
+    두 일정 간 시간 겹침 확인
+
+    Args:
+        extracted_task: 추출된 일정 정보
+        existing_task: 기존 Task 객체
+        extracted_time: 추출된 일정의 시간
+
+    Returns:
+        충돌 정보 또는 None
+    """
+    from datetime import time
+
+    # 둘 다 시간이 없는 경우 (하루 종일) - 날짜가 같으면 충돌
+    if not extracted_time and not existing_task.time:
+        return {
+            "type": "full_day_overlap",
+            "extracted_task": extracted_task.get("title", "알 수 없는 일정"),
+            "existing_task": {
+                "id": existing_task.id,
+                "title": existing_task.title,
+                "date": str(existing_task.date),
+                "time": existing_task.time.strftime("%H:%M") if existing_task.time else None
+            },
+            "message": f"'{existing_task.title}' 일정과 날짜가 겹칩니다"
+        }
+
+    # 추출된 일정에 시간 정보가 있는 경우
+    if extracted_time:
+        if existing_task.time:
+            # 둘 다 시간 정보가 있는 경우 - 시간 범위 비교
+            time_diff = abs((existing_task.time.hour * 60 + existing_task.time.minute) -
+                          (extracted_time.hour * 60 + extracted_time.minute))
+
+            # 2시간 이내로 가까우면 충돌로 간주
+            if time_diff <= 120:  # 2시간 = 120분
+                return {
+                    "type": "time_overlap",
+                    "extracted_task": extracted_task.get("title", "알 수 없는 일정"),
+                    "existing_task": {
+                        "id": existing_task.id,
+                        "title": existing_task.title,
+                        "date": str(existing_task.date),
+                        "time": existing_task.time.strftime("%H:%M") if existing_task.time else None
+                    },
+                    "time_diff_minutes": time_diff,
+                    "message": f"'{existing_task.title}' 일정과 {time_diff}분 차이로 시간이 가깝습니다"
+                }
+        else:
+            # 기존 일정은 하루 종일, 새 일정은 특정 시간 - 날짜가 같으면 충돌
+            return {
+                "type": "mixed_overlap",
+                "extracted_task": extracted_task.get("title", "알 수 없는 일정"),
+                "existing_task": {
+                    "id": existing_task.id,
+                    "title": existing_task.title,
+                    "date": str(existing_task.date),
+                    "time": None
+                },
+                "message": f"'{existing_task.title}' 일정(하루 종일)과 겹칠 수 있습니다"
+            }
+
+    # 추출된 일정에 시간 정보가 없고 기존 일정에 시간 정보가 있는 경우
+    # 추출된 일정은 하루 종일로 간주 - 날짜가 같으면 충돌
+    if not extracted_time and existing_task.time:
+        return {
+            "type": "mixed_overlap",
+            "extracted_task": extracted_task.get("title", "알 수 없는 일정"),
+            "existing_task": {
+                "id": existing_task.id,
+                "title": existing_task.title,
+                "date": str(existing_task.date),
+                "time": existing_task.time.strftime("%H:%M") if existing_task.time else None
+            },
+            "message": f"'{existing_task.title}' 일정과 겹칠 수 있습니다"
+        }
+
+    return None
 
 @router.post("/analyze")
 async def analyze_text(
@@ -114,7 +257,7 @@ async def extract_schedule(
                 "extracted_tasks": result.get("extracted_tasks", []),
                 "confidence": result.get("confidence", 0.0),
                 "analysis": result.get("analysis", ""),
-                "conflicts": []  # TODO: 충돌 감지 로직 추가 필요
+                "conflicts": _check_schedule_conflicts(result.get("extracted_tasks", []), current_user.id, db)
             },
             message="일정이 추출되었습니다"
         )

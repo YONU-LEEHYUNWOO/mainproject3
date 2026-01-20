@@ -51,7 +51,8 @@ const Layout = ({ mode }: LayoutProps) => {
   }
 
   const handleModeChange = () => {
-    if (window.confirm('모드를 변경하시겠습니까? 현재 설정이 초기화됩니다.')) {
+    if (window.confirm('모드를 변경하시겠습니까?')) {
+      // 위치 관련 데이터는 유지하고 userMode만 제거
       localStorage.removeItem('userMode')
       navigate('/mode-select')
     }
@@ -95,16 +96,14 @@ const Layout = ({ mode }: LayoutProps) => {
                   <Link
                     key={item.name}
                     to={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                      isActive
+                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${isActive
                         ? 'bg-blue-100 text-blue-900'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     <Icon
-                      className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                        isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'
-                      }`}
+                      className={`mr-3 h-5 w-5 flex-shrink-0 ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'
+                        }`}
                     />
                     {item.name}
                   </Link>
