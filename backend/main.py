@@ -172,9 +172,9 @@ try:
     )
     from database import engine, create_tables
     from config import DATABASE_URL
-    print("✅ 모델 import 완료")
+    print("모델 import 완료")
 except Exception as e:
-    print(f"❌ 모델 import 오류: {e}")
+    print(f"모델 import 오류: {e}")
     import traceback
     traceback.print_exc()
 
@@ -183,7 +183,7 @@ except Exception as e:
 async def startup_event():
     """애플리케이션 시작 시 실행되는 이벤트"""
     try:
-        print("🔄 데이터베이스 테이블 초기화 시작...")
+        print("데이터베이스 테이블 초기화 시작...")
         
         # 데이터베이스 파일 경로 확인
         import os
@@ -202,8 +202,8 @@ async def startup_event():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
-        print(f"✅ 데이터베이스 테이블 초기화 완료")
-        print(f"📊 생성된 테이블 목록: {existing_tables}")
+        print(f"데이터베이스 테이블 초기화 완료")
+        print(f"생성된 테이블 목록: {existing_tables}")
         
         # users 테이블이 있는지 확인하고 없으면 생성
         if 'users' not in existing_tables:
@@ -245,7 +245,7 @@ async def startup_event():
                 # 계속 진행 (get_db에서 다시 시도할 것)
             
     except Exception as e:
-        print(f"❌ 데이터베이스 초기화 오류: {e}")
+        print(f"데이터베이스 초기화 오류: {e}")
         import traceback
         traceback.print_exc()
 
@@ -339,23 +339,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # 라우터 등록
 # run.py에서 sys.path에 backend 폴더를 추가하므로 절대 import 사용
 print("\n" + "="*60)
-print("🔄 라우터 등록 시작...")
+print("라우터 등록 시작...")
 print("="*60)
 
 try:
     # 라우터를 직접 import (routers 패키지 경유)
     # run.py에서 sys.path에 backend를 추가하므로 routers.auth로 import 가능
-    print("📦 라우터 모듈 import 시도...")
-    
+    print("라우터 모듈 import 시도...")
+
     # 인증 라우터 import 및 등록
     try:
         import routers.auth as auth
-        print(f"  ✅ auth 모듈 import 성공, router 타입: {type(auth.router)}")
-        print(f"  📍 auth 라우터 경로: {[r.path for r in auth.router.routes]}")
+        print(f"  auth 모듈 import 성공, router 타입: {type(auth.router)}")
+        print(f"  auth 라우터 경로: {[r.path for r in auth.router.routes]}")
         app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
-        print("✅ 인증 라우터 등록 완료: /api/auth")
+        print("인증 라우터 등록 완료: /api/auth")
     except Exception as e:
-        print(f"❌ auth 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        print(f"auth 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
     
@@ -363,55 +363,55 @@ try:
     try:
         import routers.tasks as tasks
         app.include_router(tasks.router, prefix="/api/tasks", tags=["일정관리"])
-        print("✅ 일정 관리 라우터 등록 완료: /api/tasks")
+        print("일정 관리 라우터 등록 완료: /api/tasks")
     except Exception as e:
-        print(f"❌ tasks 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        print(f"tasks 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-    
+
     # 약 관리 라우터 import 및 등록
     try:
         import routers.medicine as medicine
         app.include_router(medicine.router, prefix="/api/medicine", tags=["약관리"])
-        print("✅ 약 관리 라우터 등록 완료: /api/medicine")
+        print("약 관리 라우터 등록 완료: /api/medicine")
     except Exception as e:
-        print(f"❌ medicine 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        print(f"medicine 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-    
+
     # 보호자 관리 라우터 import 및 등록
     try:
         import routers.guardians as guardians
         app.include_router(guardians.router, prefix="/api/guardians", tags=["보호자"])
-        print("✅ 보호자 관리 라우터 등록 완료: /api/guardians")
+        print("보호자 관리 라우터 등록 완료: /api/guardians")
     except Exception as e:
-        print(f"❌ guardians 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        print(f"guardians 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-    
+
     # AI 라우터 import 및 등록
     try:
         import routers.ai as ai
         app.include_router(ai.router, prefix="/api/ai", tags=["AI분석"])
-        print("✅ AI 라우터 등록 완료: /api/ai")
+        print("AI 라우터 등록 완료: /api/ai")
     except Exception as e:
-        print(f"❌ ai 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        print(f"ai 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-    
+
     # 알림 로그 라우터 import 및 등록
     try:
         import routers.notification_logs as notification_logs
         app.include_router(notification_logs.router, prefix="/api/notification-logs", tags=["알림로그"])
-        print("✅ 알림 로그 라우터 등록 완료: /api/notification-logs")
+        print("알림 로그 라우터 등록 완료: /api/notification-logs")
     except Exception as e:
-        print(f"❌ notification_logs 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        print(f"notification_logs 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-    
-    print("\n✅ 라우터 등록 프로세스 완료!")
-    
-    print("\n✅ 모든 라우터 등록 완료!")
+
+    print("\n라우터 등록 프로세스 완료!")
+
+    print("\n모든 라우터 등록 완료!")
     
     # 등록된 라우터 확인
     print(f"\n📋 등록된 라우터 목록:")
@@ -433,7 +433,7 @@ try:
     print("="*60 + "\n")
     
 except Exception as e:
-    print(f"\n❌ 라우터 등록 오류: {type(e).__name__}: {e}")
+    print(f"\n라우터 등록 오류: {type(e).__name__}: {e}")
     import traceback
     traceback.print_exc()
     print("="*60 + "\n")

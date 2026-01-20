@@ -1,483 +1,124 @@
-# 🔧 작업자 A (백엔드) TODO 리스트
+## 역할 정의
 
-## 📋 작업 범위
-- **기존 파일 수정/개선**: `tasks.py`, `medicine.py`, `ai.py`, `auth.py`
-- **공통 작업**: API 응답 형식 통일, 부모/자식 모드 구분
-- **Swagger 문서화**: 자신이 작업한 파일들
-
-## ⚠️ 최우선 작업: API 응답 형식 통일 (모든 Phase 시작 전 필수)
-
-### ✅ 공통-0: API 응답 형식 통일 (최우선)
-**파일**: `backend/main.py`, 모든 라우터 파일
-**우선순위**: 최우선 (Phase 1 시작 전 완료 권장)
-
-**📅 2026-01-19 완료 작업:**
-- ✅ **백엔드 구조 안정화 완료**
-  - ✅ `utils/serializer.py` 생성: datetime/time/date 직렬화 공통 함수
-    - `serialize_datetime_objects()`: 재귀적 datetime 객체 변환
-    - `orm_to_dict()`: SQLAlchemy ORM 객체를 dict로 변환
-    - `model_to_dict()`: Pydantic/ORM 객체 변환
-  - ✅ `utils/logger.py` 생성: uvicorn과 충돌하지 않는 안전한 로깅
-    - `log_info()`, `log_error()`, `log_warning()`, `log_debug()`
-    - 에러 발생 시 traceback 자동 출력
-  - ✅ `utils/response.py` 개선: `success_response()` 함수 개선
-    - 내부에서 `serialize_datetime_objects()` 사용하여 datetime 객체 자동 변환
-    - 통일된 응답 형식: `{status, message, data}`
-  - ✅ `routers/tasks.py` 개선: 공통 serializer 적용
-    - `create_task`, `get_tasks`, `get_task`, `update_task`에서 `orm_to_dict()` 사용
-  - ✅ import 방식 통일: 모든 파일에서 절대 import 사용
-  - ✅ `main.py` 미들웨어 개선: 로거 import를 모듈 레벨로 이동
-  - ✅ `README_RUN.md` 생성: 실행 방법 및 구조 문서화
-
-**⚠️ 다음 작업 (서버 재시작 후 진행):**
-- [ ] **CORS 설정 강화** (`main.py`)
-  ```python
-  from fastapi.middleware.cors import CORSMiddleware
-  
-  app.add_middleware(
-      CORSMiddleware,
-      allow_origins=["http://localhost:5173", "http://localhost:3000"],  # 프론트엔드 URL
-      allow_credentials=True,
-      allow_methods=["*"],  # GET, POST, PUT, PATCH, DELETE, OPTIONS 모두 허용
-      allow_headers=["*"],
-  )
-  ```
-
-- [x] **성공 응답 형식 통일** ✅ (2026-01-19 완료)
-  ```python
-  # 모든 성공 응답은 다음 형식 사용 (utils/response.py의 success_response() 사용)
-  {
-      "status": 200,
-      "message": "성공 메시지",
-      "data": {...}  # 실제 데이터
-  }
-  ```
-  - ✅ `utils/response.py`의 `success_response()` 함수 사용
-  - ✅ datetime/time/date 객체 자동 변환 처리됨
-  - ✅ `routers/tasks.py`의 모든 엔드포인트에 적용 완료
-
-- [ ] **에러 응답 형식 통일**
-  ```python
-  # 422 유효성 검사 오류 (Pydantic 기본 형식)
-  {
-      "detail": [
-          {
-              "loc": ["field_name"],
-              "msg": "에러 메시지",
-              "type": "error_type"
-          }
-      ]
-  }
-  
-  # 기타 에러 (HTTPException 사용)
-  HTTPException(
-      status_code=400/404/500,
-      detail="에러 메시지"
-  )
-  ```
-
-- [x] **기존 API 응답 형식 점검 및 수정** ✅ (2026-01-19 부분 완료)
-  - ✅ `tasks.py`의 모든 엔드포인트 응답 형식 수정 완료
-    - `create_task`, `get_tasks`, `get_task`, `update_task`, `delete_task`, `toggle_task_completion` 모두 `success_response()` 사용
-  - [ ] `medicine.py`의 모든 엔드포인트 응답 형식 확인 및 수정 (다음 작업)
-  - [ ] `ai.py`의 모든 엔드포인트 응답 형식 확인 및 수정 (다음 작업)
-  - [ ] `auth.py`의 모든 엔드포인트 응답 형식 확인 및 수정 (다음 작업)
-
-**예상 소요 시간**: 1-2시간 (나머지 작업)
-**⚠️ 중요**: 이 작업을 먼저 완료하면 이후 모든 API 개발이 일관성 있게 진행됩니다.
-
-**📝 다음 작업 순서:**
-1. 서버 재시작 후 Python 캐시 삭제 확인
-2. `medicine.py`의 모든 엔드포인트에 `success_response()` 적용
-3. `ai.py`의 모든 엔드포인트에 `success_response()` 적용
-4. `auth.py`의 모든 엔드포인트에 `success_response()` 적용
-5. CORS 설정 강화 (필요 시)
+- 공통 기반 담당
+- 각 Phase에서 기존 기능 안정성 확인 + 최소 수정
+- 프론트와 직접 맞닿는 API가 깨지지 않도록 유지
 
 ---
 
-## 🎯 Phase 1: 기본 기능 완성 (우선순위: 최고)
+## ⚠️ Cursor 작업 규칙 (콘텍스트 절약 · 필독)
 
-### ✅ Step 1-1: 일정 완료 토글 API 수정
-**파일**: `backend/routers/tasks.py`
+이 문서는 새로 설계하거나 재구현하라는 문서가 아니다.
 
-- [ ] **CORS 설정 확인** (공통-0에서 이미 설정했다면 확인만)
-  - `PATCH` 메서드 허용 확인
-  - `OPTIONS` preflight 요청 처리 확인
-  - `main.py`의 CORSMiddleware 설정 확인
-
-- [ ] **API 엔드포인트 수정**
-  ```python
-  @router.patch("/{task_id}/complete")
-  async def toggle_task_completion(
-      task_id: int,
-      current_user: User = Depends(get_current_user),
-      db: Session = Depends(get_db)
-  ):
-      """
-      일정 완료 상태 토글
-      """
-      task = db.query(Task).filter(
-          and_(Task.id == task_id, Task.owner_id == current_user.id)
-      ).first()
-      
-      if not task:
-          raise HTTPException(
-              status_code=status.HTTP_404_NOT_FOUND,
-              detail="일정을 찾을 수 없습니다"
-          )
-      
-      task.completed = not task.completed
-      if task.completed:
-          task.completed_at = datetime.now()
-      else:
-          task.completed_at = None
-      
-      db.commit()
-      db.refresh(task)
-      
-      return {
-          "status": 200,
-          "message": "일정이 완료 처리되었습니다" if task.completed else "일정 완료가 해제되었습니다",
-          "data": {
-              "id": task.id,
-              "completed": task.completed,
-              "completed_at": task.completed_at.isoformat() if task.completed_at else None
-          }
-      }
-  ```
-
-- [ ] **응답 형식 통일**
-  - 성공 시: `{status: 200, message: "...", data: {...}}`
-  - 실패 시: 적절한 HTTP 상태 코드와 에러 메시지
-
-- [ ] **테스트**
-  - Swagger UI에서 테스트
-  - CORS 오류 확인
-  - 프론트엔드와 통합 테스트
-
-**예상 소요 시간**: 1-2시간
+1. 기존 코드가 있으면 새로 만들지 않는다
+2. 수정 전 반드시 직접 테스트한다
+3. 테스트에서 오류가 재현되지 않으면 수정하지 않는다
+4. 예시 코드는 참고용이며 그대로 복사하지 않는다
+5. 한 파일에 100줄 이상 추가가 필요하면 즉시 중단한다
+6. 현재 Phase 외 작업은 절대 진행하지 않는다
 
 ---
 
-### ✅ Step 1-2: 날짜별 일정 조회 API 개선
-**파일**: `backend/routers/tasks.py`
+## 🔹 Phase 0 – 공통 기반 고정 (A 단독) ✅ 완료
 
-- [ ] **쿼리 파라미터 추가**
-  ```python
-  @router.get("/", response_model=TaskListResponse)
-  async def get_tasks(
-      date: Optional[str] = Query(None, description="날짜 필터 (YYYY-MM-DD)"),
-      completed: Optional[bool] = Query(None, description="완료 여부 필터"),
-      skip: int = Query(0, ge=0),
-      limit: int = Query(100, ge=1, le=1000),
-      filter_params: TaskFilter = Depends(),
-      current_user: User = Depends(get_current_user),
-      db: Session = Depends(get_db)
-  ):
-      """
-      일정 목록 조회
-      날짜별, 완료 여부별 필터링 지원
-      """
-      query = db.query(Task).filter(Task.owner_id == current_user.id)
-      
-      # 날짜 필터
-      if date:
-          from datetime import datetime
-          filter_date = datetime.strptime(date, "%Y-%m-%d").date()
-          query = query.filter(Task.date == filter_date)
-      
-      # 완료 여부 필터
-      if completed is not None:
-          query = query.filter(Task.completed == completed)
-      
-      # 기존 필터 적용
-      # ... (기존 코드)
-      
-      # 집계 데이터 계산
-      total = query.count()
-      completed_count = query.filter(Task.completed == True).count()
-      remaining_count = total - completed_count
-      
-      tasks = query.offset(skip).limit(limit).all()
-      
-      return {
-          "status": 200,
-          "message": "성공",
-          "data": {
-              "tasks": [TaskResponse.from_orm(task) for task in tasks],
-              "total": total,
-              "completed": completed_count,
-              "remaining": remaining_count,
-              "page": skip // limit + 1,
-              "per_page": limit
-          }
-      }
-  ```
+### 목표
+- 이후 Phase에서 환경/설정 문제로 발생하는 오류 제거
 
-- [ ] **응답에 집계 데이터 추가**
-  - `TaskListResponse` 스키마에 `completed`, `remaining` 필드 추가 (필요 시)
-  - 또는 응답 형식 통일을 위해 위 코드처럼 직접 반환
+### 작업 범위
+- API 응답 형식 최종 고정
+- 에러 응답 규칙 고정
+- CORS 설정 최종 확인 (OPTIONS, PATCH 포함)
+- serializer / response / logger 정상 동작 확인
 
-- [ ] **테스트**
-  - 다양한 날짜로 테스트
-  - 필터링 옵션 테스트
-  - 집계 데이터 확인
+### 작업 방식
+- 새 코드 작성 금지
+- 기존 설정이 실제로 잘 동작하는지 확인만 수행
 
-**예상 소요 시간**: 2-3시간
+### 테스트 방법
+1. 서버 실행 ✅
+2. /docs 접속 ✅
+3. 일정 생성 API 호출 ✅
+4. 200 응답 확인 ✅
+5. 프론트 달력에 반영되는지 확인 ✅
+
+### 완료 조건
+- Swagger / 프론트 모두 오류 없음 ✅
+- Phase 0 완료 전까지 B 작업 시작 금지 ✅
+
+### 수행 결과
+- **API 응답 형식**: `utils/response.py`의 `success_response()`로 일관된 형식 구현
+- **에러 응답 규칙**: `error_response()` 함수로 표준화된 에러 처리
+- **CORS 설정**: `CORSMiddleware`에서 모든 HTTP 메서드 허용, 프론트엔드 URL 등록
+- **유틸리티 확인**: `serializer.py`, `response.py`, `logger.py` 정상 동작
+- **최소 수정**: Unicode 인코딩 문제 해결을 위해 `main.py` 이모지 로그를 텍스트로 변경
 
 ---
 
-### ✅ Step 1-3: 약 알림 API 완성
-**파일**: `backend/routers/medicine.py`
+## 🔹 Phase 1 – 일정 기능 안정화 (다음 작업)
 
-**현재 상태**: 기본 CRUD는 구현됨, 다음 기능 추가 필요
+### 목표
+- 프론트 달력 / 대시보드와 완벽히 동기화
 
-- [ ] **오늘의 약 알림 API 개선**
-  - `GET /api/medicine/today` 또는 `GET /api/medicine/alarms/today` 응답 형식 개선
-  - **응답 형식 (프론트엔드 기대 형식)**:
-    ```python
-    {
-        "status": 200,
-        "message": "성공",
-        "data": {
-            "alarms": [
-                {
-                    "id": 1,
-                    "medicine_name": "혈압약",
-                    "dosage": "1정",
-                    "time_1": "09:00",
-                    "time_2": "21:00",
-                    "time_3": null,
-                    "time_4": null,
-                    "last_taken": "2025-01-19T09:05:00",
-                    "next_reminder": "2025-01-19T21:00:00",
-                    "is_taken": false,
-                    "is_active": true
-                }
-            ]
-        }
-    }
-    ```
-  - 복용 시간별 정렬 (time_1 기준)
-  - 복용 완료 여부 포함 (`is_taken` 필드)
+### 확인 대상
+- 일정 생성
+- 날짜 필터
+- 집계 데이터
+- 일정 완료 토글 (PATCH)
 
-- [ ] **복용 완료 기록 API 개선**
-  - `POST /api/medicine/taken` 또는 `POST /api/medicine/alarms/{id}/taken` 응답 형식 개선
-  - 다음 알림 시간 계산 로직 확인
+### 작업 방식
+- 기존 API 수정 전 테스트 필수
+- CORS 오류가 재현될 때만 수정
 
-- [ ] **약 알림 스케줄링 준비**
-  - 다음 알림 시간 계산 로직 확인
-  - 알림 시간 체크 로직 준비
+### 테스트 방법
+- 달력에서 일정 하나 추가
+- 완료 토글 클릭
+- 네트워크 탭에서 오류 여부 확인
 
-- [ ] **테스트**
-  - 모든 CRUD 작업 테스트
-  - 시간 검증 테스트
-  - 프론트엔드와 통합 테스트
-
-**예상 소요 시간**: 2-3시간
+### 완료 조건
+- 프론트 기준 정상 동작
+- 콘솔 / 네트워크 에러 없음
 
 ---
 
-## 🤖 Phase 3: AI/모니터링 기능
+## 🔹 Phase 2 – 위치 API 기초
 
-### ✅ Step 3-1: AI 일정 추출 API 개선
-**파일**: `backend/routers/ai.py`
+### 목표
+- 위치 데이터 저장 / 조회 가능
 
-**현재 상태**: 기본 구현됨, 개선 필요
+### 작업 범위
+- 위치 저장 API
+- 현재 위치 조회 API
+- 부모/자식 권한 확인
 
-- [ ] **일정 추출 API 개선**
-  ```python
-  @router.post("/ai/extract-schedule")
-  async def extract_schedule(
-      request: ScheduleExtractRequest,
-      current_user: User = Depends(get_current_user),
-      db: Session = Depends(get_db)
-  ):
-      """
-      자연어에서 일정 정보 추출
-      """
-      # AI로 일정 정보 추출
-      # 기존 일정과 충돌 확인
-      # 일정 자동 생성 (선택적)
-      # 응답 형식 통일 적용
-      return {
-          "status": 200,
-          "message": "일정이 추출되었습니다",
-          "data": {...}
-      }
-  ```
+### 제한
+- 지도 구현 금지
+- 경로 계산 금지
+- 시각화 금지
 
-- [ ] **충돌 감지 로직**
-  - 추출된 일정과 기존 일정 비교
-  - 충돌하는 일정 목록 반환
-
-- [ ] **일정 자동 생성 옵션**
-  - `auto_create` 파라미터 추가
-  - True일 경우 자동으로 일정 생성
-
-- [ ] **응답 형식 통일**
-  - 모든 응답을 통일된 형식으로 변경
-
-- [ ] **테스트**
-  - 다양한 자연어 입력 테스트
-  - 충돌 감지 테스트
-
-**예상 소요 시간**: 3-4시간
+### 테스트 방법
+- 위치 저장 → 조회
+- 값 일치 여부 확인
 
 ---
 
-## 📝 공통 작업
+## 🔹 Phase 3 – AI 일정 추출 보완
 
-### ✅ 공통-1: 부모/자식 모드 구분 API
-**파일**: `backend/routers/tasks.py`, `backend/routers/medicine.py`, `backend/routers/ai.py`
+### 목표
+- 텍스트 → 일정 데이터 변환 안정화
 
-- [ ] **보호자 관계 확인 헬퍼 함수 생성**
-  ```python
-  # backend/routers/guardians.py 또는 utils.py에 추가
-  def verify_guardian_relationship(
-      guardian_id: int,  # 자식 ID
-      parent_id: int,    # 부모 ID
-      db: Session
-  ) -> bool:
-      """
-      보호자 관계 확인
-      """
-      guardian = db.query(Guardian).filter(
-          and_(
-              Guardian.guardian_id == guardian_id,
-              Guardian.parent_id == parent_id,
-              Guardian.is_active == True
-          )
-      ).first()
-      return guardian is not None
-  ```
+### 작업 범위
+- AI 일정 추출 API 점검
+- 기존 일정과 충돌 감지 확인
 
-- [ ] **모드별 권한 확인 로직 추가**
-  - 부모 모드: 자신의 데이터만 조회/수정
-  - 자식 모드: 부모님 데이터 조회 (읽기 전용 또는 제한된 수정)
-
-- [ ] **자식 모드에서 부모님 데이터 조회 시 권한 확인**
-  - 약 알림 조회: `GET /api/medicine/alarms?parent_id={parent_id}` (필요 시)
-  - 일정 조회: `GET /api/tasks?parent_id={parent_id}` (필요 시)
-
-- [ ] **기존 API에 모드 구분 로직 적용**
-  - `tasks.py`의 모든 엔드포인트에 모드 확인 로직 추가
-  - `medicine.py`의 모든 엔드포인트에 모드 확인 로직 추가
-
-**예상 소요 시간**: 2-3시간
+### 테스트 방법
+- “내일 오후 3시에 병원 가” 입력
+- 날짜 / 시간 정상 추출 여부 확인
 
 ---
 
-### ✅ 공통-2: Swagger 문서화
-**파일**: 자신이 작업한 모든 라우터 파일
+## 🔒 Phase 종료 규칙 (공통)
 
-- [ ] **API 문서화**
-  - `tasks.py`의 모든 엔드포인트에 설명 추가
-  - `medicine.py`의 모든 엔드포인트에 설명 추가
-  - `ai.py`의 모든 엔드포인트에 설명 추가
-  - 요청/응답 예시 추가
-  - 에러 응답 문서화
-
-- [ ] **Swagger UI 확인**
-  - `/docs` 페이지에서 모든 API 확인
-  - 문서 정확성 확인
-
-**예상 소요 시간**: 2-3시간
-
----
-
-## ✅ 통합 체크리스트
-
-### Phase 1 시작 전 확인 (최우선)
-- [ ] **공통-0: API 응답 형식 통일 완료** ⚠️ 필수
-- [ ] CORS 설정 확인 (모든 메서드 허용)
-- [ ] 기본 에러 처리 로직 구현
-
-### Phase 1 완료 전 확인
-- [ ] 모든 엔드포인트 Swagger 문서화
-- [ ] 에러 응답 형식 통일 확인
-- [ ] 작업자 B와 API 연동 테스트
-- [ ] 약 알림 API 응답 형식 확인 (프론트엔드와 일치)
-
----
-
-## 🚨 주의사항
-
-1. **작업자 B와의 협업**
-   - API 완료 후 작업자 B에게 알림
-   - API 스펙 변경 시 즉시 소통
-   - Swagger 문서 최신 상태 유지
-
-2. **파일 충돌 방지**
-   - 작업자 A는 `tasks.py`, `medicine.py`, `ai.py`, `auth.py`만 수정
-   - 작업자 B는 새 파일들(`location.py`, `map.py` 등) 작업
-   - 공통 파일 수정 시 사전 협의
-
-3. **코드 품질**
-   - Python 타입 힌트 명시
-   - 에러 처리 필수
-   - 주석 작성 (한국어)
-   - 함수 최대 100줄 이하
-
-4. **테스트**
-   - 각 단계 완료 후 테스트 필수
-   - 프론트엔드와 통합 테스트 진행
-   - Swagger UI에서 수동 테스트
-
-5. **보안**
-   - JWT 토큰 검증 필수
-   - 사용자 권한 확인
-   - SQL Injection 방지
-   - XSS 방지
-
----
-
-## 📌 프론트엔드 연동 참고사항
-
-### 프론트엔드에서 기대하는 API 응답 형식
-- **성공**: `{status: 200, message: "...", data: {...}}`
-- **422 에러**: Pydantic 기본 형식 `{detail: [{loc: [...], msg: "...", type: "..."}]}`
-- **기타 에러**: HTTP 상태 코드와 `detail` 필드
-
-### 작업 순서 권장사항
-1. **공통-0 완료** (최우선) → 모든 API 응답 형식 통일
-2. **Step 1-1 완료** → 일정 완료 토글 API
-3. **Step 1-2 완료** → 날짜별 일정 조회 API
-4. **Step 1-3 완료** → 약 알림 API
-5. **공통-1 완료** → 부모/자식 모드 구분
-6. **공통-2 완료** → Swagger 문서화
-
----
-
----
-
-## 📌 현재 진행 상태 (2026-01-19)
-
-### ✅ 완료된 작업
-1. **백엔드 구조 안정화** (2026-01-19)
-   - datetime/time/date 직렬화 공통 유틸리티 생성
-   - 로깅 구조 정리 (uvicorn 충돌 해결)
-   - API 응답 포맷 통일 기반 작업 완료
-   - `tasks.py` 모든 엔드포인트에 공통 serializer 적용
-
-### 🔄 진행 중인 작업
-- 공통-0: API 응답 형식 통일 (50% 완료)
-  - ✅ `tasks.py` 완료
-  - ⏳ `medicine.py`, `ai.py`, `auth.py` 남음
-
-### 📋 다음 작업 (우선순위 순)
-1. **공통-0 완료**: 나머지 라우터 파일들(`medicine.py`, `ai.py`, `auth.py`)에 `success_response()` 적용
-2. **Phase 1-1**: 일정 완료 토글 API 수정
-3. **Phase 1-2**: 날짜별 일정 조회 API 개선
-4. **Phase 1-3**: 약 알림 API 완성
-
-### ⚠️ 주의사항
-- 서버 재시작 전 Python 캐시(`__pycache__`) 삭제 권장
-- 모든 ORM 객체 반환 시 `orm_to_dict()` 사용 필수
-- 모든 로깅은 `utils.logger`의 함수 사용 (`log_info`, `log_error` 등)
-
----
-
-**작성일**: 2025-01-19  
-**최종 수정**: 2026-01-19  
-**작업자**: A (기존 파일 수정/개선 담당)
+- Phase 하나 종료 시 merge
+- merge 후 서버 실행
+- 핵심 기능 1개 이상 직접 테스트
+- 이상 없을 때만 다음 Phase 진행
