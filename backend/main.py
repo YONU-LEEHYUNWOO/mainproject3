@@ -82,12 +82,13 @@ async def log_requests(request: Request, call_next):
 # 프론트엔드 URL을 명시적으로 허용 (개발 환경)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite 기본 포트
-        "http://localhost:3000",  # React 기본 포트
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    # allow_origins=[
+    #     "http://localhost:5173",
+    #     "http://localhost:3000",
+    #     "http://127.0.0.1:5173",
+    #     "http://127.0.0.1:3000",
+    # ],
+    allow_origin_regex="http://(localhost|127\\.0\\.0\\.1):\\d+",  # 모든 로컬호스트 포트 허용
     allow_credentials=True,  # 쿠키 및 인증 정보 허용
     allow_methods=["*"],  # GET, POST, PUT, PATCH, DELETE, OPTIONS 모두 허용
     allow_headers=["*"],  # 모든 헤더 허용
@@ -106,7 +107,7 @@ async def root():
     
     logger = logging.getLogger("uvicorn.access")
     
-    msg = "✅ [ROOT] / 엔드포인트 호출됨"
+    msg = "[ROOT] / 엔드포인트 호출됨"
     
     # 여러 방법으로 출력
     sys.stderr.write(f"{'='*60}\n{msg}\n{'='*60}\n")
@@ -141,13 +142,13 @@ async def test_login():
 async def simple_login(request: Request):
     """간단한 로그인 테스트 엔드포인트 - 데이터베이스 없이 작동"""
     try:
-        print(f"📥 [login-simple] 요청 받음")
+        print(f"[LOGIN-SIMPLE] 요청 받음")
         body = await request.json()
         username = body.get("username", "")
         password = body.get("password", "")
-        
-        print(f"📥 [login-simple] username={username}")
-        
+
+        print(f"[LOGIN-SIMPLE] username={username}")
+
         # 간단한 테스트 응답
         response = {
             "access_token": "test_token_simple",
@@ -155,10 +156,10 @@ async def simple_login(request: Request):
             "expires_in": 3600,
             "user_id": 1
         }
-        print(f"✅ [login-simple] 응답 전송")
+        print(f"[LOGIN-SIMPLE] 응답 전송")
         return response
     except Exception as e:
-        print(f"❌ [login-simple] 오류: {type(e).__name__}: {str(e)}")
+        print(f"[LOGIN-SIMPLE] 오류: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
         raise
@@ -389,6 +390,16 @@ try:
         import traceback
         traceback.print_exc()
 
+    # 위치 관리 라우터 import 및 등록
+    try:
+        import routers.location as location
+        app.include_router(location.router, prefix="/api/location", tags=["위치관리"])
+        print("위치 관리 라우터 등록 완료: /api/location")
+    except Exception as e:
+        print(f"location 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+
     # AI 라우터 import 및 등록
     try:
         import routers.ai as ai
@@ -423,7 +434,7 @@ try:
             print(f"    - {methods} {route.path}")
     
     all_routes = [r for r in app.routes if hasattr(r, 'path') and hasattr(r, 'methods')]
-    print(f"\n  📊 전체 라우터 개수: {len(all_routes)}개")
+    print(f"\n  전체 라우터 개수: {len(all_routes)}개")
     for route in all_routes[:10]:  # 처음 10개만 출력
         methods = ', '.join(route.methods) if route.methods else 'N/A'
         print(f"    - {methods} {route.path}")

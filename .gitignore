@@ -82,6 +82,12 @@ alembic/versions/*.pyc
 frontend/dist/
 frontend/build/
 
+# Temporary scripts
+add_*.py
+create_*.py
+fix_*.py
+migrate_*.py
+
 # Coverage reports
 htmlcov/
 .coverage

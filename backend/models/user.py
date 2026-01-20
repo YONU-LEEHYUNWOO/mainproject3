@@ -7,6 +7,7 @@ from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import BaseModel
+from .location import Location
 
 class User(BaseModel):
     """사용자 모델"""
@@ -21,13 +22,17 @@ class User(BaseModel):
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     last_login = Column(DateTime, nullable=True)
+    location_sharing_enabled = Column(Boolean, default=False, nullable=False)
+
 
     # 관계 설정 (lazy loading으로 성능 최적화)
     # 로그인 시 관계 로드 문제를 방지하기 위해 lazy="select" 사용
     tasks = relationship("Task", back_populates="owner", lazy="select")
     chat_messages = relationship("ChatMessage", back_populates="user", lazy="select")
     ai_conversations = relationship("AIConversation", back_populates="user", lazy="select")
-    guardians = relationship("Guardian", back_populates="user", lazy="select")
+    # guardians 관계는 Guardian 모델에서 backref로 설정됨
+    # guardians = relationship("Guardian", back_populates="user", lazy="select")
+    locations = relationship("Location", back_populates="user", lazy="select")
     medicines = relationship("Medicine", back_populates="owner", lazy="select")
     medicine_alarms = relationship("MedicineAlarm", back_populates="user", lazy="select")
     notification_logs = relationship("NotificationLog", back_populates="user", lazy="select")

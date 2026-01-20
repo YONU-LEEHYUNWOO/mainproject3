@@ -4,8 +4,10 @@
 """
 
 from sqlalchemy import Column, String, Integer, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship as sa_relationship
 from .base import BaseModel
+
+from datetime import datetime
 
 class Guardian(BaseModel):
     """보호자 모델"""
@@ -20,14 +22,29 @@ class Guardian(BaseModel):
     notification_enabled = Column(Boolean, default=True, nullable=False)  # 알림 수신 여부
     access_level = Column(String(20), default="view", nullable=False)  # view, edit, admin
 
+    # SQLite Datetime 파싱 오류 방지를 위해 String으로 재정의
+    created_at = Column(String, default=lambda: datetime.now().isoformat(), nullable=False)
+    updated_at = Column(String, default=lambda: datetime.now().isoformat(), onupdate=lambda: datetime.now().isoformat(), nullable=False)
+
+    # Pydantic 호환성을 위한 프로퍼티
+    @property
+    def relationship(self):
+        return self.relationship_type
+    
+    @relationship.setter
+    def relationship(self, value):
+        self.relationship_type = value
+
     # 외래 키
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # 보호받는 사람 (자식)
+    guardian_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # 보호자 User ID (부모)
 
     # 관계 설정
-    user = relationship("User", back_populates="guardians")
+    user = sa_relationship("User", foreign_keys=[user_id], backref="guardians")
+    guardian_user = sa_relationship("User", foreign_keys=[guardian_user_id])
 
     def __repr__(self):
-        return f"<Guardian(id={self.id}, name={self.name}, relationship={self.relationship_type}, user_id={self.user_id})>"
+        return f"<Guardian(id={self.id}, name={self.name}, relationship={self.relationship_type}, user_id={self.user_id}, guardian_user_id={self.guardian_user_id})>"
 
     def get_relationship_display(self):
         """관계 텍스트 반환"""
