@@ -1,9 +1,4 @@
-"""
-보호자 관련 Pydantic 스키마
-보호자 관리를 위한 요청/응답 모델입니다.
-"""
-
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, AliasChoices
 from typing import Optional, Union
 from datetime import datetime
 
@@ -12,7 +7,7 @@ class GuardianBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[EmailStr] = None
-    relationship: Optional[str] = Field(None, max_length=50, validation_alias="relationship_type", serialization_alias="relationship")  # 가족관계
+    relationship: Optional[str] = Field(None, max_length=50, validation_alias=AliasChoices("relationship", "relationship_type"), serialization_alias="relationship")  # 가족관계
     guardian_user_id: Optional[int] = None  # 보호자 User ID
     is_primary: bool = False
     emergency_contact: bool = False

@@ -420,6 +420,16 @@ try:
         import traceback
         traceback.print_exc()
 
+    # 사용자 검색 라우터 import 및 등록
+    try:
+        import routers.users as users
+        app.include_router(users.router, prefix="/api/users", tags=["사용자"])
+        print("사용자 라우터 등록 완료: /api/users")
+    except Exception as e:
+        print(f"users 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+
     print("\n라우터 등록 프로세스 완료!")
 
     print("\n모든 라우터 등록 완료!")

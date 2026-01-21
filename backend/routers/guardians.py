@@ -81,8 +81,22 @@ async def create_guardian(
             # 기존 주보호자의 주보호자 상태 해제
             existing_primary.is_primary = False
 
+    # 전화번호로 기존 가입자 확인 및 자동 연동
+    guardian_user_id = guardian.guardian_user_id
+    if not guardian_user_id and guardian.phone:
+        matched_user = db.query(User).filter(User.phone == guardian.phone).first()
+        if matched_user:
+            guardian_user_id = matched_user.id
+            print(f"DEBUG: Guardian match found! Phone: {guardian.phone} -> User ID: {guardian_user_id}")
+
+    # Pydantic 필드명(relationship)을 DB 컬럼명(relationship_type)으로 변환
+    guardian_data = guardian.dict(exclude={"guardian_user_id", "relationship"})
+    relationship_type = guardian.relationship
+
     db_guardian = Guardian(
-        **guardian.dict(),
+        **guardian_data,
+        relationship_type=relationship_type,
+        guardian_user_id=guardian_user_id,
         user_id=current_user.id
     )
     db.add(db_guardian)
