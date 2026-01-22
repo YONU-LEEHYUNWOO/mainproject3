@@ -33,6 +33,7 @@ class User(BaseModel):
     # guardians 관계는 Guardian 모델에서 backref로 설정됨
     # guardians = relationship("Guardian", back_populates="user", lazy="select")
     locations = relationship("Location", back_populates="user", lazy="select")
+    favorite_places = relationship("FavoritePlace", back_populates="user", lazy="select")
     medicines = relationship("Medicine", back_populates="owner", lazy="select")
     medicine_alarms = relationship("MedicineAlarm", back_populates="user", lazy="select")
     notification_logs = relationship("NotificationLog", back_populates="user", lazy="select")

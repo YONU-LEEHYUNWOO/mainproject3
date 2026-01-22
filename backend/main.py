@@ -27,6 +27,24 @@ app = FastAPI(
     }
 )
 
+# 시작 시 설정 출력
+@app.on_event("startup")
+async def startup_event():
+    try:
+        from config import GEMINI_MODEL, GEMINI_API_KEY
+    except ImportError:
+        try:
+            from backend.config import GEMINI_MODEL, GEMINI_API_KEY
+        except ImportError:
+            GEMINI_MODEL = "UNKNOWN"
+            GEMINI_API_KEY = ""
+            
+    print("\n" + "="*60)
+    print(f"🚀 [AI CONFIG CHECK]")
+    print(f"✅ Loaded Model: {GEMINI_MODEL}")
+    print(f"✅ API Key: {'*' * 10}{GEMINI_API_KEY[-4:] if GEMINI_API_KEY else 'NOT FOUND'}")
+    print("="*60 + "\n")
+
 # 요청 로깅 미들웨어 추가 (CORS 미들웨어보다 먼저)
 # 로거 import를 모듈 레벨로 이동 (캐시 문제 방지)
 from utils.logger import log_info, log_error
@@ -427,6 +445,16 @@ try:
         print("사용자 라우터 등록 완료: /api/users")
     except Exception as e:
         print(f"users 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # 즐겨찾기 라우터 import 및 등록
+    try:
+        import routers.favorites as favorites
+        app.include_router(favorites.router, prefix="/api/favorites", tags=["즐겨찾기"])
+        print("즐겨찾기 라우터 등록 완료: /api/favorites")
+    except Exception as e:
+        print(f"favorites 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
 

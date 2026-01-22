@@ -28,9 +28,91 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     date: selectedDate ? formatLocalDate(selectedDate) : '',
     time: '',
     location: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
     priority: 2, // 보통
     category: '일반'
   })
+
+  // 장소 검색 상태
+  const [locationQuery, setLocationQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [showResults, setShowResults] = useState(false)
+
+  // 장소 검색 함수
+  const searchPlaces = (query: string) => {
+    if (!query.trim() || !window.kakao || !window.kakao.maps) {
+      setSearchResults([])
+      return
+    }
+
+    setIsSearching(true)
+    const ps = new window.kakao.maps.services.Places()
+
+    const searchOptions: any = {
+      size: 10
+    }
+
+    // 현재 위치 기반 검색 (가능한 경우)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          searchOptions.location = new window.kakao.maps.LatLng(
+            position.coords.latitude,
+            position.coords.longitude
+          )
+          searchOptions.radius = 5000 // 5km
+
+          ps.keywordSearch(query, (data: any[], status: any) => {
+            if (status === window.kakao.maps.services.Status.OK) {
+              setSearchResults(data)
+              setShowResults(true)
+            } else {
+              setSearchResults([])
+            }
+            setIsSearching(false)
+          }, searchOptions)
+        },
+        () => {
+          // 위치 정보 없으면 전국 검색
+          ps.keywordSearch(query, (data: any[], status: any) => {
+            if (status === window.kakao.maps.services.Status.OK) {
+              setSearchResults(data)
+              setShowResults(true)
+            } else {
+              setSearchResults([])
+            }
+            setIsSearching(false)
+          }, searchOptions)
+        }
+      )
+    } else {
+      // Geolocation 미지원 시 전국 검색
+      ps.keywordSearch(query, (data: any[], status: any) => {
+        if (status === window.kakao.maps.services.Status.OK) {
+          setSearchResults(data)
+          setShowResults(true)
+        } else {
+          setSearchResults([])
+        }
+        setIsSearching(false)
+      }, searchOptions)
+    }
+  }
+
+  // 장소 선택 핸들러
+  const handlePlaceSelect = (place: any) => {
+    setFormData(prev => ({
+      ...prev,
+      location: place.place_name,
+      latitude: parseFloat(place.y),
+      longitude: parseFloat(place.x)
+    }))
+    setLocationQuery(place.place_name)
+    setShowResults(false)
+    setSearchResults([])
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,6 +125,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       date: formData.date, // "YYYY-MM-DD" 형식 유지
       time: formData.time && formData.time.trim() ? formData.time.trim() : null, // 시간 전송
       location: formData.location || '',
+      latitude: formData.latitude,
+      longitude: formData.longitude,
       priority: Number(formData.priority), // string → number
       completed: false, // 명시적으로 추가
       reminder_minutes: 0, // 명시적으로 추가
@@ -63,9 +147,14 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       date: selectedDate ? selectedDate.toISOString().split('T')[0] : '',
       time: '',
       location: '',
+      latitude: null,
+      longitude: null,
       priority: 2,
       category: '일반'
     })
+    setLocationQuery('')
+    setSearchResults([])
+    setShowResults(false)
     onClose()
   }
 
@@ -131,19 +220,67 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             </div>
           </div>
 
-          {/* 장소 */}
+          {/* 장소 검색 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <MapPin size={14} className="inline mr-1" />
               장소
             </label>
-            <input
-              type="text"
-              value={formData.location}
-              onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="장소를 입력하세요"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={locationQuery}
+                onChange={(e) => {
+                  setLocationQuery(e.target.value)
+                  if (e.target.value.trim()) {
+                    searchPlaces(e.target.value)
+                  } else {
+                    setSearchResults([])
+                    setShowResults(false)
+                  }
+                }}
+                onFocus={() => {
+                  if (searchResults.length > 0) {
+                    setShowResults(true)
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="장소를 검색하세요 (예: 병원, 약국)"
+              />
+
+              {/* 검색 결과 드롭다운 */}
+              {showResults && searchResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {searchResults.map((place, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handlePlaceSelect(place)}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-b-0"
+                    >
+                      <div className="font-medium text-sm text-gray-900">{place.place_name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{place.category_group_name}</div>
+                      <div className="text-xs text-gray-600 mt-0.5">{place.road_address_name || place.address_name}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 로딩 표시 */}
+              {isSearching && (
+                <div className="absolute right-3 top-2.5">
+                  <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                </div>
+              )}
+            </div>
+
+            {/* 선택된 장소 표시 */}
+            {formData.location && formData.latitude && (
+              <div className="mt-2 text-sm text-green-600 flex items-center">
+                <MapPin size={14} className="mr-1" />
+                선택됨: {formData.location}
+              </div>
+            )}
           </div>
 
           {/* 우선순위 */}

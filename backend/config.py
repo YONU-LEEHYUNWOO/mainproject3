@@ -13,7 +13,7 @@ load_dotenv(dotenv_path='../.env')  # 프로젝트 루트 (..env)
 
 # 디버그: 환경 변수 로드 확인
 import os
-print(f"DEBUG: GEMINI_API_KEY loaded: {'Yes' if os.getenv('GEMINI_API_KEY') else 'No'}")
+print(f"DEBUG: GEMINI_API_KEY loaded: {'Yes' if os.getenv('GEMINI_API_KEY') or os.getenv('VITE_GEMINI_API_KEY') else 'No'}")
 print(f"DEBUG: Current working directory: {os.getcwd()}")
 
 # 데이터베이스 설정 (개발용 SQLite, 프로덕션 시 PostgreSQL로 변경)
@@ -25,8 +25,9 @@ ALGORITHM = config("ALGORITHM", default="HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30, cast=int)
 
 # AI API 설정 - 직접 os.getenv() 사용 (더 확실함)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY", "")
+# 모델명 원복 (안정적인 1.5 Flash 사용)
+GEMINI_MODEL = "gemini-1.5-flash"
 
 # 디버그: 실제 값 확인
 print(f"DEBUG: Final GEMINI_API_KEY = {'***' + GEMINI_API_KEY[-4:] if GEMINI_API_KEY else 'EMPTY'}")
@@ -34,6 +35,7 @@ print(f"DEBUG: Final GEMINI_MODEL = {GEMINI_MODEL}")
 
 # 지도 API 설정 (선택)
 KAKAO_MAP_API_KEY = config("KAKAO_MAP_API_KEY", default="")
+KAKAO_REST_API_KEY = config("KAKAO_REST_API_KEY", default="")
 NAVER_MAP_API_KEY = config("NAVER_MAP_API_KEY", default="")
 
 # 날씨 API 설정 (선택)

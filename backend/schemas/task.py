@@ -32,6 +32,7 @@ class TaskCreate(BaseModel):
     category: str = Field("일반", max_length=50)
     completed: bool = False
     reminder_minutes: int = Field(0, ge=0)
+    owner_id: Optional[int] = None  # 일정 소유자 ID (보호자 모드 지원용)
 
 class TaskUpdate(BaseModel):
     """일정 업데이트 스키마"""

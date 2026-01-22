@@ -3,15 +3,15 @@
 사용자의 약 복용 알림을 관리하는 CRUD 기능을 제공합니다.
 """
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, date
-
 from database import get_db
 from auth import get_current_user
 from models.user import User
 from models.medicine_alarm import MedicineAlarm
+from models.guardian import Guardian
 from schemas.medicine_alarm import (
     MedicineAlarmCreate, MedicineAlarmUpdate, MedicineAlarmResponse,
     MedicineAlarmListResponse, MedicineTakenRequest, MedicineTakenResponse
@@ -219,18 +219,29 @@ async def mark_medicine_taken(
 
 @router.get("/today")
 async def get_today_medicine_alarms(
+    user_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    오늘의 약 알림 조회
-    오늘 복용해야 할 약 목록을 반환합니다.
+    오늘의 약 알림 조회 (보호자 권한 지원)
     """
     today = date.today()
+    
+    # 대상 사용자 ID 결정
+    target_id = current_user.id
+    if user_id and user_id != current_user.id:
+        guardian = db.query(Guardian).filter(
+            Guardian.user_id == user_id, 
+            Guardian.guardian_user_id == current_user.id
+        ).first()
+        if not guardian:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        target_id = user_id
 
     from sqlalchemy import or_
     alarms = db.query(MedicineAlarm).filter(
-        MedicineAlarm.user_id == current_user.id,
+        MedicineAlarm.user_id == target_id,
         MedicineAlarm.is_active == True,
         MedicineAlarm.start_date <= today,
         or_(MedicineAlarm.end_date >= today, MedicineAlarm.end_date.is_(None))
@@ -273,18 +284,29 @@ async def get_today_medicine_alarms(
 
 @router.get("/due-now")
 async def get_due_medicine_alarms(
+    user_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    지금 복용해야 할 약 조회
-    현재 시간에 복용해야 할 약 목록을 반환합니다.
+    지금 복용해야 할 약 조회 (보호자 권한 지원)
     """
     now = datetime.now()
     current_time = now.time()
+    
+    # 대상 사용자 ID 결정
+    target_id = current_user.id
+    if user_id and user_id != current_user.id:
+        guardian = db.query(Guardian).filter(
+            Guardian.user_id == user_id, 
+            Guardian.guardian_user_id == current_user.id
+        ).first()
+        if not guardian:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        target_id = user_id
 
     alarms = db.query(MedicineAlarm).filter(
-        MedicineAlarm.user_id == current_user.id,
+        MedicineAlarm.user_id == target_id,
         MedicineAlarm.is_active == True
     ).all()
 

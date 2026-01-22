@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
-import { MapPin, Navigation, Shield, AlertTriangle, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { useLocation as useRouteLocation, useSearchParams } from 'react-router-dom'
+import { MapPin, Navigation, Loader2, Search, Star, Clock, X, AlertTriangle } from 'lucide-react'
 import { KakaoMap } from '../components/KakaoMap'
-import api from '../services/api'
+import { useLocation } from '../hooks/useLocation'
+import { useGuardianLocation } from '../hooks/useGuardianLocation'
+import { useFavorites } from '../hooks/useFavorites'
+import { tasksAPI } from '../services/api'
 
 declare global {
   interface Window {
@@ -10,494 +13,522 @@ declare global {
   }
 }
 
-/**
- * Location 페이지
- * 위치 추적 및 안전 구역 관리
- */
+interface Place {
+  id: string
+  place_name: string
+  address_name: string
+  road_address_name?: string
+  phone?: string
+  x: string
+  y: string
+  category_group_name?: string
+}
+
 const Location = () => {
-  const location = useLocation()
-  const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
+  const routeLocation = useRouteLocation()
+  const [searchParams] = useSearchParams()
+  const mode = routeLocation.pathname.startsWith('/parent') ? 'parent' : 'child'
+  const searchParam = searchParams.get('search')
+  const taskIdParam = searchParams.get('taskId')
+  const taskId = taskIdParam ? parseInt(taskIdParam) : null
 
-  const [currentLocation, setCurrentLocation] = useState<{
-    latitude: number
-    longitude: number
-    accuracy: number
+  // Custom Hooks
+  const {
+    currentLocation,
+    isTracking,
+    setIsTracking,
+    error: locationError,
+    isLoading: isLocationLoading,
+    isSupported,
+    refreshLocation
+  } = useLocation(mode)
+
+  const {
+    parentLocation,
+    isLoading: isParentLoading,
+    error: parentError,
+    fetchParentLocation
+  } = useGuardianLocation(mode)
+
+  const {
+    favorites,
+    addFavorite,
+    removeFavorite,
+    isLoading: isFavoritesLoading
+  } = useFavorites()
+
+  // Local UI State
+  const [keyword, setKeyword] = useState('')
+  const [searchResults, setSearchResults] = useState<Place[]>([])
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
+  const [activeTab, setActiveTab] = useState<'favorites' | 'search'>('favorites')
+
+  const initialSearchPerformed = useRef(false)
+
+  // URL 검색 파라미터 처리
+  useEffect(() => {
+    if (searchParam && !initialSearchPerformed.current) {
+      setKeyword(searchParam)
+      setActiveTab('search')
+
+      // SDK 로딩 확인 후 검색 (최대 5회 재시도)
+      let retryCount = 0
+      const trySearch = () => {
+        if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+          performSearch(searchParam)
+          initialSearchPerformed.current = true
+        } else if (retryCount < 5) {
+          retryCount++
+          console.log(`🔍 SDK 대화 중... (${retryCount}/5)`)
+          setTimeout(trySearch, 500)
+        }
+      }
+      trySearch()
+    }
+  }, [searchParam])
+
+  // 검색 로직 분리
+  const performSearch = (query: string) => {
+    console.log('🔍 performSearch 호출됨, query:', query)
+    console.log('🔍 window.kakao 존재:', !!window.kakao)
+    console.log('🔍 window.kakao.maps 존재:', !!(window.kakao && window.kakao.maps))
+
+    if (!query.trim() || !window.kakao || !window.kakao.maps) {
+      console.warn('⚠️ 검색 중단: query 없음 또는 카카오맵 SDK 미로드')
+      return
+    }
+
+    setIsSearching(true)
+    const ps = new window.kakao.maps.services.Places()
+    console.log('🔍 Places 서비스 생성 완료')
+
+    // 현재 위치 기준으로 검색하기 위한 옵션 설정
+    const baseLocation = (mode === 'parent' && currentLocation)
+      ? currentLocation
+      : (mode === 'child' && parentLocation)
+        ? parentLocation
+        : null
+
+    const searchOptions: any = {
+      size: 15 // 검색 결과 개수
+    }
+
+    // 현재 위치가 있으면 위치 기반 검색
+    if (baseLocation) {
+      searchOptions.location = new window.kakao.maps.LatLng(baseLocation.latitude, baseLocation.longitude)
+      searchOptions.radius = 5000 // 5km 반경
+      console.log('🔍 위치 기반 검색:', baseLocation.latitude, baseLocation.longitude, '반경 5km')
+    } else {
+      console.log('🔍 전국 검색 (현재 위치 없음)')
+    }
+
+    ps.keywordSearch(query, (data: any[], status: any) => {
+      console.log('🔍 검색 결과 수신, status:', status, 'data:', data)
+      if (status === window.kakao.maps.services.Status.OK) {
+        console.log('✅ 검색 성공, 결과 개수:', data.length)
+        setSearchResults(data)
+      } else if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
+        console.log('⚠️ 검색 결과 없음')
+        setSearchResults([])
+      } else if (status === window.kakao.maps.services.Status.ERROR) {
+        console.error('❌ 검색 중 오류가 발생했습니다.')
+      }
+      setIsSearching(false)
+    }, searchOptions)
+  }
+
+  // Search Handler
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    console.log('🔍 handleSearch 호출됨, keyword:', keyword)
+    performSearch(keyword)
+  }
+
+  const updateTaskLocation = async (task_id: number, place: Place) => {
+    try {
+      await tasksAPI.updateTask(task_id, {
+        location: place.place_name,
+        latitude: parseFloat(place.y),
+        longitude: parseFloat(place.x)
+      })
+      alert(`✅ '${place.place_name}'(으)로 일정이 업데이트되었습니다.`)
+    } catch (error) {
+      console.error('일정 위치 업데이트 실패:', error)
+      alert('일정 업데이트 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handlePlaceSelect = (place: Place) => {
+    setSelectedPlace(place)
+    if (taskId) {
+      updateTaskLocation(taskId, place)
+    }
+  }
+
+  const handleAddStart = async (place: Place) => {
+    await addFavorite(
+      place.place_name,
+      place.road_address_name || place.address_name,
+      parseFloat(place.y),
+      parseFloat(place.x),
+      'other'
+    )
+    alert('즐겨찾기에 추가되었습니다.')
+  }
+
+  const handleRemoveStar = async (favoriteId: number) => {
+    await removeFavorite(favoriteId)
+  }
+
+  // Route State
+  const [routeData, setRouteData] = useState<{
+    distance: number
+    duration: number
+    path: { lat: number; lng: number }[]
   } | null>(null)
-  const [isTracking, setIsTracking] = useState(() => {
-    // localStorage에서 이전 상태 복원
-    const saved = localStorage.getItem('location_tracking')
-    return saved ? JSON.parse(saved) : false
-  })
-  const [locationError, setLocationError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isLocationSupported, setIsLocationSupported] = useState(false)
-  const [favorites, setFavorites] = useState<Array<{ lat: number; lng: number; name: string; address: string }>>([])
-  const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
-  const [parentLocation, setParentLocation] = useState<any>(null)
-  const [isLoadingParentLocation, setIsLoadingParentLocation] = useState(false)
-  const [lastModeCheck, setLastModeCheck] = useState<string>('')
+  const [isRouteLoading, setIsRouteLoading] = useState(false)
 
-  /**
-   * 좌표를 주소로 변환 (Kakao Geocoder)
-   */
-  const getAddressFromCoords = (lat: number, lng: number): Promise<string | null> => {
-    return new Promise((resolve) => {
-      if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
-        console.log('Kakao Maps SDK not loaded')
-        resolve(null)
+  // Fetch Route when place is selected
+  useEffect(() => {
+    const fetchRoute = async () => {
+      const baseLocation = (mode === 'parent' && currentLocation)
+        ? currentLocation
+        : (mode === 'child' && parentLocation)
+          ? parentLocation
+          : null
+
+      if (!selectedPlace || !baseLocation) {
+        setRouteData(null)
         return
       }
 
-      const geocoder = new window.kakao.maps.services.Geocoder()
-      geocoder.coord2Address(lng, lat, (result: any, status: any) => {
-        if (status === window.kakao.maps.services.Status.OK) {
-          const addr = result[0]?.address?.address_name || result[0]?.road_address?.address_name
-          resolve(addr || null)
-        } else {
-          resolve(null)
-        }
-      })
-    })
-  }
-
-  /**
-   * 위치 서비스 지원 여부 확인
-   */
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      setIsLocationSupported(true)
-    } else {
-      setLocationError('브라우저가 위치 서비스를 지원하지 않습니다.')
-    }
-
-    // 즐겨찾기 로드
-    const savedFavorites = localStorage.getItem('location_favorites')
-    if (savedFavorites) {
+      setIsRouteLoading(true)
       try {
-        setFavorites(JSON.parse(savedFavorites))
+        const { locationAPI } = await import('../services/api')
+        const response = await locationAPI.getRoute(
+          { lat: baseLocation.latitude, lng: baseLocation.longitude },
+          { lat: parseFloat(selectedPlace.y), lng: parseFloat(selectedPlace.x) }
+        )
+        setRouteData(response.data.data)
       } catch (error) {
-        console.error('즐겨찾기 로드 오류:', error)
+        console.error('Failed to fetch route:', error)
+      } finally {
+        setIsRouteLoading(false)
       }
     }
-  }, [])
 
-  /**
-   * 현재 위치 가져오기
-   */
-  const getCurrentLocation = () => {
-    if (!isLocationSupported) return
+    fetchRoute()
+  }, [selectedPlace, currentLocation, parentLocation, mode])
 
-    setIsLoading(true)
-    setLocationError(null)
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords
-
-        setCurrentLocation({
-          latitude,
-          longitude,
-          accuracy: accuracy || 0
-        })
-        setIsLoading(false)
-
-        // 부모 모드일 때만 서버로 위치 전송 (수동 새로고침 시에도)
-        if (mode === 'parent') {
-          try {
-            // 주소 변환
-            let address = null
-            try {
-              address = await getAddressFromCoords(latitude, longitude)
-              console.log('주소 변환 성공:', address)
-            } catch (e) {
-              console.error('주소 변환 실패:', e)
-            }
-
-            const locationData = {
-              latitude,
-              longitude,
-              accuracy: accuracy || 0,
-              address: address, // 주소 포함
-              location_type: 'current'
-            }
-
-            await api.post('/api/location', locationData)
-            console.log('위치(주소포함) 수동 전송 완료')
-          } catch (err) {
-            console.error('위치 전송 실패:', err)
-          }
-        }
-      },
-      (error) => {
-        let errorMessage = '위치를 가져올 수 없습니다.'
-
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = '위치 권한이 거부되었습니다.'
-            break
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = '위치 정보를 사용할 수 없습니다.'
-            break
-          case error.TIMEOUT:
-            errorMessage = '위치 요청 시간이 초과되었습니다.'
-            break
-        }
-
-        setLocationError(errorMessage)
-        setIsLoading(false)
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
-    )
+  const openNavigation = (place: Place) => {
+    const url = `https://map.kakao.com/link/to/${place.place_name},${place.y},${place.x}`
+    window.open(url, '_blank')
   }
 
-  /**
-   * 위치 추적 시작/중지
-   */
-  const toggleTracking = () => {
-    if (!isLocationSupported) return
-
-    if (isTracking) {
-      setIsTracking(false)
-    } else {
-      setIsTracking(true)
-      // 즉시 위치 전송 호출 (getCurrentLocation 내부 로직 사용 X, 별도 구현)
-      // -> getCurrentLocation()은 로딩 UI를 건드리므로 분리
-
-      // 위치 공유 토글 ON/OFF 상태 확인
-      console.log('위치 공유 토글 켜짐, GPS 추적 시작')
-
-      // 헬퍼 함수: 위치 전송
-      const sendLocation = async (position: GeolocationPosition) => {
-        console.log('GPS 위치 가져오기 성공:', position.coords)
-
-        // 주소 변환
-        let address = null
-        try {
-          address = await getAddressFromCoords(position.coords.latitude, position.coords.longitude)
-        } catch (e) {
-          console.error('주소 변환/SDK 오류:', e)
-        }
-
-        const locationData = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy || 0,
-          address: address,
-          location_type: 'current'
-        }
-
-        setCurrentLocation({
-          latitude: locationData.latitude,
-          longitude: locationData.longitude,
-          accuracy: locationData.accuracy
-        })
-
-        // API로 위치 전송
-        try {
-          console.log('위치 저장 API 호출 시작...', locationData)
-          const response = await api.post('/api/location', locationData)
-          console.log('✅ 위치 저장 성공:', response.data)
-          setLocationError(null) // 에러 초기화
-        } catch (apiError: any) {
-          console.error('❌ 위치 저장 API 실패:', apiError)
-          if (apiError.response?.status === 401) {
-            setLocationError('인증이 필요합니다. 다시 로그인해주세요.')
-          } else if (apiError.response?.status === 500) {
-            setLocationError('서버 오류가 발생했습니다.')
-          } else {
-            setLocationError(`위치 저장 실패: ${apiError.message}`)
-          }
-        }
-      }
-
-      // 한 번만 현재 위치 가져오기
-      navigator.geolocation.getCurrentPosition(
-        sendLocation,
-        (error) => {
-          console.error('❌ GPS 위치 가져오기 실패:', error)
-          setLocationError('위치 권한을 확인해주세요.')
-          setIsTracking(false)
-        },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 300000 }
-      )
-
-      // watchPosition 대신 setInterval로 주기적 업데이트 (더 안정적)
-      const intervalId = setInterval(() => {
-        if (isTracking) {
-          navigator.geolocation.getCurrentPosition(
-            sendLocation,
-            (error) => {
-              console.error('주기적 위치 업데이트 GPS 실패:', error.message)
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-          )
-        }
-      }, 60000) // 1분마다 업데이트
-
-      // 컴포넌트 언마운트 시 정리
-      return () => {
-        clearInterval(intervalId)
-      }
-    }
-  }
-
-  /**
-   * 즐겨찾기 추가
-   */
-  const handleAddFavorite = (location: { lat: number; lng: number; name: string; address: string }) => {
-    const newFavorites = [...favorites, location]
-    setFavorites(newFavorites)
-    localStorage.setItem('location_favorites', JSON.stringify(newFavorites))
-  }
-
-  /**
-   * 위치 선택 핸들러
-   */
-  const handleLocationSelect = (location: { lat: number; lng: number; address: string }) => {
-    setSelectedLocation(location)
-    setCurrentLocation({
-      latitude: location.lat,
-      longitude: location.lng,
-      accuracy: 0
-    })
-  }
-
-  /**
-   * 부모 위치 조회 (자식 모드용)
-   */
-  const getParentLocation = async () => {
-    if (mode !== 'child') return
-
-    setIsLoadingParentLocation(true)
-    try {
-      // 현재 사용자의 guardian 정보를 조회해서 첫 번째 부모의 ID를 찾음
-      console.log('Guardian API 호출 시작...')
-      const guardiansResponse = await api.get('/api/guardians/')
-      console.log('Guardian API 응답:', guardiansResponse)
-      // API 응답 구조가 직접 객체 반환일 수도 있고, 표준 응답(res.data)일 수도 있음
-      const guardians = guardiansResponse.data.guardians || guardiansResponse.data?.data?.guardians || []
-      console.log('가져온 guardians:', guardians)
-
-      if (guardians.length > 0) {
-        // 임시: 부모 ID를 1로 가정 (실제로는 Guardian 모델에 guardian_user_id 필드가 필요)
-        const parentId = 1  // 테스트용 부모 ID
-        console.log('임시 부모 ID 사용:', parentId, '(Guardian 정보:', guardians[0].name, ')')
-
-        // 부모의 현재 위치 조회
-        console.log('부모 위치 API 호출 시도:', `/api/location/parent/${parentId}`)
-        const locationResponse = await api.get(`/api/location/parent/${parentId}`)
-        console.log('부모 위치 API 응답:', locationResponse)
-        const locationData = locationResponse.data
-
-        if (locationData) {
-          setParentLocation(locationData)
-          setCurrentLocation({
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            accuracy: locationData.accuracy || 0
-          })
-          console.log('부모 위치 조회 성공:', locationData)
-        } else {
-          setParentLocation(null)
-          console.log('부모 위치 데이터 없음 - 부모가 아직 위치 공유를 시작하지 않음')
-        }
-      }
-    } catch (error: any) {
-      console.error('부모 위치 조회 오류:', error)
-      setParentLocation(null)
-      // 403 에러는 권한 없음, 404는 위치 없음으로 처리
-      if (error.response?.status === 403) {
-        console.log('부모 위치 조회 권한이 없습니다')
-      }
-    } finally {
-      setIsLoadingParentLocation(false)
-    }
-  }
-
-  /**
-   * 모드 변경 시 부모 위치 조회 (자식 모드) 및 위치 추적 상태 확인
-   */
-  useEffect(() => {
-    if (mode === 'child' && mode !== lastModeCheck) {
-      // 모드가 자식으로 변경되었을 때만 조회
-      setLastModeCheck(mode)
-
-      // 모드 변경 시에도 부모 위치 정보 유지 (localStorage에서 복원)
-      const savedParentLocation = localStorage.getItem('parent_location')
-      if (savedParentLocation) {
-        try {
-          const parsed = JSON.parse(savedParentLocation)
-          setParentLocation(parsed)
-          console.log('모드 변경 시 부모 위치 복원됨:', parsed)
-        } catch (error) {
-          console.error('저장된 부모 위치 복원 실패:', error)
-        }
-      }
-
-      // API로 최신 부모 위치 조회
-      getParentLocation()
-    } else if (mode !== 'child') {
-      setLastModeCheck(mode)
-
-      // 부모 모드로 변경되었을 때 위치 추적이 켜져있으면 재시작
-      if (mode === 'parent' && isTracking && isLocationSupported) {
-        console.log('부모 모드로 변경됨, 위치 추적 재시작')
-        // 간단히 현재 위치를 다시 가져와서 표시
-        getCurrentLocation()
-      }
-    }
-  }, [mode, isTracking, isLocationSupported])
-
-  /**
-   * 부모 위치 정보가 업데이트되면 localStorage에 저장
-   */
-  useEffect(() => {
-    if (parentLocation && mode === 'child') {
-      localStorage.setItem('parent_location', JSON.stringify(parentLocation))
-    }
-  }, [parentLocation, mode])
-
-  /**
-   * 위치 추적 상태가 변경되면 localStorage에 저장
-   */
-  useEffect(() => {
-    localStorage.setItem('location_tracking', JSON.stringify(isTracking))
-  }, [isTracking])
+  const displayLocation = selectedPlace
+    ? { lat: parseFloat(selectedPlace.y), lng: parseFloat(selectedPlace.x) }
+    : (mode === 'parent' && currentLocation)
+      ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      : (mode === 'child' && parentLocation)
+        ? { lat: parentLocation.latitude, lng: parentLocation.longitude }
+        : null
 
   return (
-    <div className="space-y-6">
-      {/* 모드별 제목 */}
+    <div className="space-y-6 pb-20">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {mode === 'parent' ? '내 위치 관리 📍' : '부모님 위치 확인 📍'}
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          {mode === 'parent' ? '내 위치 관리' : '부모님 위치 확인'}
+          <span className="text-2xl">📍</span>
         </h1>
         <p className="text-sm text-gray-500 mt-1">
           {mode === 'parent'
-            ? '내 위치를 공유하고 안전 구역을 설정하세요'
-            : '부모님의 위치를 실시간으로 확인하세요'}
+            ? '안심 구역 설정 및 위치 공유 관리'
+            : '실시간 위치 확인 및 이동 경로 모니터링'}
         </p>
       </div>
 
-      {/* 지도 영역 */}
-      {currentLocation && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">위치 지도</h2>
-          <div className="h-96 rounded-lg overflow-hidden">
+      {/* Map Area */}
+      <div className="bg-white shadow rounded-lg p-4">
+        <div className="h-80 w-full rounded-lg overflow-hidden bg-gray-100 relative">
+          {displayLocation ? (
             <KakaoMap
-              center={{
-                lat: currentLocation.latitude,
-                lng: currentLocation.longitude
-              }}
-              markers={[{
-                lat: currentLocation.latitude,
-                lng: currentLocation.longitude,
-                title: mode === 'parent' ? '내 위치' : '부모님 위치',
-                color: 'blue'
-              }]}
-              favorites={favorites}
-              onLocationSelect={handleLocationSelect}
-              onFavoriteAdd={handleAddFavorite}
-              mode={mode}
-              className="h-full"
+              center={displayLocation}
+              showSearch={false}
+              markers={[
+                ...(currentLocation && mode === 'parent' ? [{
+                  lat: currentLocation.latitude,
+                  lng: currentLocation.longitude,
+                  title: '나',
+                  color: 'blue'
+                }] : []),
+                ...(parentLocation && mode === 'child' ? [{
+                  lat: parentLocation.latitude,
+                  lng: parentLocation.longitude,
+                  title: '부모님',
+                  color: 'red'
+                }] : []),
+                ...(selectedPlace ? [{
+                  lat: parseFloat(selectedPlace.y),
+                  lng: parseFloat(selectedPlace.x),
+                  title: selectedPlace.place_name,
+                  color: 'green'
+                }] : [])
+              ]}
+              routePath={routeData?.path}
+              className="h-full w-full"
             />
-          </div>
-          {selectedLocation && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-900">
-                <strong>선택된 위치:</strong> {selectedLocation.address}
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500">
+                {isLocationLoading || isParentLoading ? '위치 로딩 중...' : '위치 정보가 없습니다.'}
               </p>
             </div>
           )}
-        </div>
-      )}
 
-      {/* 위치 정보 카드 */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">현재 위치</h2>
-          <button
-            onClick={getCurrentLocation}
-            disabled={isLoading || !isLocationSupported}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>위치 가져오는 중...</span>
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4" />
-                <span>위치 새로고침</span>
-              </>
-            )}
-          </button>
+          <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+            <button
+              onClick={mode === 'parent' ? refreshLocation : fetchParentLocation}
+              className="bg-white p-2 rounded-full shadow-md text-gray-700 hover:text-blue-600 focus:outline-none"
+              title="위치 새로고침"
+            >
+              {isLocationLoading || isParentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Navigation className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
 
-        {locationError ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-red-700">
-              <AlertTriangle className="h-5 w-5" />
-              <span className="text-sm">{locationError}</span>
-            </div>
+        {isRouteLoading && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center text-blue-600 gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm font-medium">최적 경로 계산 중...</span>
           </div>
-        ) : currentLocation ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
+        )}
+
+        {selectedPlace && routeData && !isRouteLoading && (
+          <div className="mt-4 p-4 border border-blue-100 bg-blue-50 rounded-lg animate-fade-in">
+            <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm text-gray-600">위도</p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {currentLocation.latitude.toFixed(6)}
-                </p>
+                <h3 className="font-bold text-lg text-gray-800">{selectedPlace.place_name}</h3>
+                <p className="text-sm text-gray-600 mt-1">{selectedPlace.road_address_name || selectedPlace.address_name}</p>
+                <div className="flex items-center gap-3 mt-2 text-sm text-gray-700">
+                  <span className="flex items-center gap-1"><MapPin className="h-4 w-4 text-blue-500" /> {(routeData.distance / 1000).toFixed(1)}km</span>
+                  <span className="flex items-center gap-1"><Clock className="h-4 w-4 text-orange-500" /> 차로 약 {Math.round(routeData.duration / 60)}분</span>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">경도</p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {currentLocation.longitude.toFixed(6)}
-                </p>
-              </div>
+              <button onClick={() => setSelectedPlace(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">정확도</p>
-              <p className="text-sm text-gray-700">
-                ±{Math.round(currentLocation.accuracy)}m
-              </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => openNavigation(selectedPlace)}
+                className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-black font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                <Navigation className="h-4 w-4" /> 길찾기 (카카오맵)
+              </button>
+              <button
+                onClick={() => handleAddStart(selectedPlace)}
+                className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                <Star className="h-4 w-4 text-yellow-500" /> 즐겨찾기 추가
+              </button>
             </div>
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-            <p>위치 정보가 없습니다.</p>
-            <p className="text-sm mt-1">위치 새로고침 버튼을 눌러주세요.</p>
           </div>
         )}
       </div>
 
-      {/* 위치 추적 토글 (부모 모드) */}
-      {mode === 'parent' && (
+      {/* Current Location Info Card */}
+      {mode === 'parent' && currentLocation && (
         <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-blue-500" />
+                내 현재 위치
+              </h3>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center text-sm text-gray-600">
+                  <span className="font-medium w-20">위도:</span>
+                  <span>{currentLocation.latitude.toFixed(6)}</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <span className="font-medium w-20">경도:</span>
+                  <span>{currentLocation.longitude.toFixed(6)}</span>
+                </div>
+                {currentLocation.address && (
+                  <div className="flex items-start text-sm text-gray-600">
+                    <span className="font-medium w-20">주소:</span>
+                    <span className="flex-1">{currentLocation.address}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'child' && parentLocation && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-red-500" />
+                부모님 현재 위치
+              </h3>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center text-sm text-gray-600">
+                  <span className="font-medium w-20">위도:</span>
+                  <span>{parentLocation.latitude.toFixed(6)}</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <span className="font-medium w-20">경도:</span>
+                  <span>{parentLocation.longitude.toFixed(6)}</span>
+                </div>
+                {parentLocation.address && (
+                  <div className="flex items-start text-sm text-gray-600">
+                    <span className="font-medium w-20">주소:</span>
+                    <span className="flex-1">{parentLocation.address}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search & Favorites Section */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="flex border-b">
+          <button
+            onClick={() => setActiveTab('favorites')}
+            className={`flex-1 py-3 text-sm font-medium text-center transition ${activeTab === 'favorites' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            즐겨찾기 목록
+          </button>
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`flex-1 py-3 text-sm font-medium text-center transition ${activeTab === 'search' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            장소 검색
+          </button>
+        </div>
+
+        <div className="p-4">
+          {activeTab === 'search' && (
+            <div className="space-y-4">
+              <form onSubmit={handleSearch} className="relative">
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="장소, 주소 검색 (예: 약국, 병원)"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                />
+                <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                <button
+                  type="submit"
+                  className="absolute right-2 top-1.5 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition"
+                  disabled={isSearching}
+                >
+                  검색
+                </button>
+              </form>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                {isSearching && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500 mb-2" />
+                    <p className="text-sm text-gray-500">검색 중...</p>
+                  </div>
+                )}
+                {!isSearching && searchResults.length > 0 && searchResults.map((place) => (
+                  <div
+                    key={place.id}
+                    onClick={() => handlePlaceSelect(place)}
+                    className={`p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition ${selectedPlace?.id === place.id ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50' : 'border-gray-200'}`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-medium text-gray-900">{place.place_name}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{place.category_group_name}</div>
+                        <div className="text-sm text-gray-600 mt-1">{place.road_address_name || place.address_name}</div>
+                      </div>
+                      {place.phone && <div className="text-xs text-gray-400">{place.phone}</div>}
+                    </div>
+                  </div>
+                ))}
+                {!isSearching && keyword && searchResults.length === 0 && (
+                  <div className="text-center py-4 text-gray-500 text-sm">검색 결과가 없습니다.</div>
+                )}
+                {!keyword && !isSearching && (
+                  <div className="text-center py-4 text-gray-400 text-sm">원하는 장소를 검색해보세요.<br />(약국, 병원, 관공서 등)</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'favorites' && (
+            <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+              {isFavoritesLoading ? (
+                <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" /></div>
+              ) : favorites.length > 0 ? favorites.map((fav) => (
+                <div key={fav.id} className="p-3 border rounded-lg flex justify-between items-center hover:bg-gray-50 transition group">
+                  <div className="cursor-pointer flex-1" onClick={() => handlePlaceSelect({
+                    id: fav.id.toString(),
+                    place_name: fav.name,
+                    address_name: fav.address,
+                    x: fav.longitude.toString(),
+                    y: fav.latitude.toString(),
+                    road_address_name: fav.address
+                  })}>
+                    <div className="font-medium flex items-center gap-2">
+                      {fav.name}
+                      <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500">{fav.category}</span>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">{fav.address}</div>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveStar(fav.id)}
+                    className="p-2 text-gray-400 hover:text-red-500 transition"
+                    title="즐겨찾기 삭제"
+                  >
+                    <Star className="h-5 w-5 fill-yellow-400 text-yellow-400 hover:text-red-500 hover:fill-none" />
+                  </button>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Star className="h-10 w-10 mx-auto text-gray-300 mb-2" />
+                  <p>즐겨찾기한 장소가 없습니다.</p>
+                  <button onClick={() => setActiveTab('search')} className="text-blue-500 text-sm mt-2 hover:underline">
+                    장소 검색하러 가기
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {mode === 'parent' && (
+        <div className="bg-white shadow rounded-lg p-6 mt-6">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center space-x-3">
                 <Navigation className="h-5 w-5 text-blue-500" />
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900">위치 공유</h3>
+                  <h3 className="text-sm font-medium text-gray-900">내 위치 공유</h3>
                   <p className="text-sm text-gray-500">
-                    위치 공유를 켜면 자식 모드에서 내 위치를 확인할 수 있습니다.
+                    위치를 공유하면 가족이 내 위치를 확인할 수 있습니다.
                   </p>
                 </div>
               </div>
             </div>
             <button
-              onClick={toggleTracking}
-              disabled={!isLocationSupported}
+              onClick={() => setIsTracking(!isTracking)}
+              disabled={!isSupported}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isTracking ? 'bg-blue-500' : 'bg-gray-200'
                 }`}
-              title={isTracking ? '위치 공유 중지' : '위치 공유 시작'}
             >
               <span
                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isTracking ? 'translate-x-5' : 'translate-x-0'
@@ -505,117 +536,19 @@ const Location = () => {
               />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* 안전 구역 설정 (부모 모드) */}
-      {mode === 'parent' && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <Shield className="h-5 w-5 text-green-500" />
-            <h2 className="text-lg font-semibold text-gray-900">안전 구역</h2>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-            안전 구역을 설정하면 해당 구역을 벗어날 때 알림을 받을 수 있습니다.
-          </p>
-          <button className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-            안전 구역 설정
-          </button>
-          <p className="text-xs text-gray-500 mt-2">
-            * 안전 구역 설정 기능은 API 연동 후 사용 가능합니다.
-          </p>
-        </div>
-      )}
-
-      {/* 부모님 위치 모니터링 (자식 모드) */}
-      {mode === 'child' && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <MapPin className="h-5 w-5 text-blue-500" />
-              <h2 className="text-lg font-semibold text-gray-900">부모님 위치</h2>
-            </div>
-            <button
-              onClick={getParentLocation}
-              disabled={isLoadingParentLocation}
-              className="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              {isLoadingParentLocation ? '조회중...' : '새로고침'}
-            </button>
-          </div>
-
-          {parentLocation ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600">위도</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {parentLocation.latitude.toFixed(6)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">경도</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {parentLocation.longitude.toFixed(6)}
-                  </p>
-                </div>
-              </div>
-
-              {parentLocation.address && (
-                <div className="mt-2 text-center">
-                  <p className="text-sm text-gray-600 mb-1">현재 주소</p>
-                  <p className="text-base font-medium text-gray-900 break-keep bg-gray-50 p-2 rounded">
-                    {parentLocation.address}
-                  </p>
-                </div>
-              )}
-
-              {parentLocation.accuracy && (
-                <div>
-                  <p className="text-sm text-gray-600">정확도</p>
-                  <p className="text-sm text-gray-700">
-                    ±{Math.round(parentLocation.accuracy)}m
-                  </p>
-                </div>
-              )}
-              <div>
-                <p className="text-sm text-gray-600">마지막 업데이트</p>
-                <p className="text-sm text-gray-700">
-                  {new Date(parentLocation.updated_at || parentLocation.created_at).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              {isLoadingParentLocation ? (
-                <>
-                  <Loader2 className="h-12 w-12 mx-auto mb-2 text-blue-500 animate-spin" />
-                  <p>부모님 위치를 조회하는 중...</p>
-                </>
-              ) : (
-                <>
-                  <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <p>부모님의 위치 정보가 없습니다.</p>
-                  <p className="text-sm mt-1">
-                    부모님이 위치 공유를 켜면 여기에 표시됩니다.
-                  </p>
-                </>
-              )}
-            </div>
+          {locationError && (
+            <p className="text-sm text-red-500 mt-2 flex items-center gap-1">
+              <AlertTriangle className="h-4 w-4" /> {locationError}
+            </p>
           )}
         </div>
       )}
 
-      {/* 이동 경로 기록 (자식 모드) */}
-      {mode === 'child' && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">이동 경로</h2>
-          <div className="text-center py-8 text-gray-500">
-            <Navigation className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-            <p>이동 경로 기록이 없습니다.</p>
-            <p className="text-sm mt-1">
-              부모님의 이동 경로는 API 연동 후 표시됩니다.
-            </p>
+      {mode === 'child' && parentError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+          <div className="flex items-center space-x-2 text-red-700">
+            <AlertTriangle className="h-5 w-5" />
+            <span className="text-sm">{parentError}</span>
           </div>
         </div>
       )}

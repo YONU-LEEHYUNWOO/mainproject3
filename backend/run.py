@@ -22,10 +22,11 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
     uvicorn.run(
-        app,
+        "main:app",
         host="0.0.0.0",
         port=8000,
         log_level="info",
         access_log=True,
-        use_colors=False  # 색상 없이 출력하여 로그가 확실히 보이도록
+        use_colors=False,
+        reload=True
     )

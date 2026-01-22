@@ -13,6 +13,7 @@ from .location import Location
 from .medicine import Medicine
 from .medicine_alarm import MedicineAlarm
 from .notification_log import NotificationLog
+from .favorite_place import FavoritePlace
 
 # 모든 모델을 __all__에 명시
 __all__ = [
@@ -25,5 +26,6 @@ __all__ = [
     "Location",
     "Medicine",
     "MedicineAlarm",
-    "NotificationLog"
+    "NotificationLog",
+    "FavoritePlace"
 ]

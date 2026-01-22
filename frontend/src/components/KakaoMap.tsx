@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, MapPin, Navigation, Star, Route } from 'lucide-react'
+import { Search, MapPin, Star } from 'lucide-react'
 
 interface KakaoMapProps {
   center?: { lat: number; lng: number }
   markers?: Array<{ lat: number; lng: number; title?: string; color?: string }>
-  route?: { from: { lat: number; lng: number }; to: { lat: number; lng: number } }
-  favorites?: Array<{ lat: number; lng: number; name: string; address: string }>
+  routePath?: Array<{ lat: number; lng: number }> // 백엔드에서 받은 경로 데이터
   onLocationSelect?: (location: { lat: number; lng: number; address: string }) => void
   onFavoriteAdd?: (location: { lat: number; lng: number; name: string; address: string }) => void
-  mode?: 'parent' | 'child'
   className?: string
+  showSearch?: boolean
 }
 
 /**
@@ -18,12 +17,11 @@ interface KakaoMapProps {
 export const KakaoMap: React.FC<KakaoMapProps> = ({
   center = { lat: 37.5665, lng: 126.9780 }, // 서울시청 기본 위치
   markers = [],
-  route,
-  favorites = [],
+  routePath,
   onLocationSelect,
   onFavoriteAdd,
-  mode = 'parent',
-  className = ''
+  className = '',
+  showSearch = true
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
@@ -32,7 +30,6 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [showFavorites, setShowFavorites] = useState(false)
 
   /**
    * 지도 초기화
@@ -44,13 +41,13 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
     const initMap = () => {
       if (typeof window !== 'undefined' && (window as any).kakao && (window as any).kakao.maps) {
         const { kakao } = window as any
-        
+
         // 지도 생성
         const mapOption = {
           center: new kakao.maps.LatLng(center.lat, center.lng),
           level: 3
         }
-        
+
         const map = new kakao.maps.Map(mapContainerRef.current, mapOption)
         mapRef.current = map
 
@@ -83,27 +80,18 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
     if (!mapRef.current || !(window as any).kakao) return
 
     const { kakao } = window as any
-    
+
     // 기존 마커 제거
     markersRef.current.forEach(marker => marker.setMap(null))
     markersRef.current = []
 
     // 새 마커 추가
-    markers.forEach((markerData, index) => {
+    markers.forEach((markerData) => {
       const position = new kakao.maps.LatLng(markerData.lat, markerData.lng)
-      
-      // 커스텀 마커 이미지 (색상별)
-      const imageSrc = markerData.color === 'red' 
-        ? 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png'
-        : 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker.png'
-      
-      const imageSize = new kakao.maps.Size(24, 35)
-      const imageOption = { offset: new kakao.maps.Point(12, 35) }
-      const markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption)
-      
+
+      // 기본 마커 생성 (커스텀 이미지 URL 제거)
       const marker = new kakao.maps.Marker({
         position: position,
-        image: markerImage,
         map: mapRef.current
       })
 
@@ -142,10 +130,10 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
   }
 
   /**
-   * 경로 표시
+   * 경로 표시 (상세 경로 데이터 사용)
    */
-  const updateRoute = () => {
-    if (!mapRef.current || !route || typeof window === 'undefined' || !(window as any).kakao || !(window as any).kakao.maps) return
+  const updateRoutePath = () => {
+    if (!mapRef.current || !routePath || routePath.length === 0 || !(window as any).kakao) return
 
     const { kakao } = window as any
 
@@ -156,26 +144,26 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
     }
 
     // 경로 폴리라인 생성
-    const path = [
-      new kakao.maps.LatLng(route.from.lat, route.from.lng),
-      new kakao.maps.LatLng(route.to.lat, route.to.lng)
-    ]
+    const path = routePath.map(p => new kakao.maps.LatLng(p.lat, p.lng))
 
     const polyline = new kakao.maps.Polyline({
       path: path,
-      strokeWeight: 5,
-      strokeColor: '#3b82f6',
-      strokeOpacity: 0.7,
+      strokeWeight: 6,
+      strokeColor: '#3b82f6', // Blue-500
+      strokeOpacity: 0.8,
       strokeStyle: 'solid'
     })
 
     polyline.setMap(mapRef.current)
     polylineRef.current = polyline
 
-    // 경로를 포함하도록 지도 범위 조정
+    // 경로 전체가 보이도록 지도 범위 조정
     const bounds = new kakao.maps.LatLngBounds()
-    bounds.extend(new kakao.maps.LatLng(route.from.lat, route.from.lng))
-    bounds.extend(new kakao.maps.LatLng(route.to.lat, route.to.lng))
+    routePath.forEach(p => bounds.extend(new kakao.maps.LatLng(p.lat, p.lng)))
+
+    // 마커 위치도 포함
+    markers.forEach(m => bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)))
+
     mapRef.current.setBounds(bounds)
   }
 
@@ -184,10 +172,14 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
   }, [markers])
 
   useEffect(() => {
-    if (route) {
-      updateRoute()
+    if (routePath) {
+      updateRoutePath()
+    } else if (polylineRef.current) {
+      // 경로 데이터가 없으면 기존 경로 제거
+      polylineRef.current.setMap(null)
+      polylineRef.current = null
     }
-  }, [route])
+  }, [routePath])
 
   /**
    * 장소 검색
@@ -204,7 +196,7 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
 
     places.keywordSearch(searchQuery, (data: any, status: any) => {
       setIsSearching(false)
-      
+
       if (status === kakao.maps.services.Status.OK) {
         setSearchResults(data.slice(0, 5)) // 상위 5개만 표시
       } else {
@@ -219,7 +211,7 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
   const handleSelectResult = (place: any) => {
     const lat = parseFloat(place.y)
     const lng = parseFloat(place.x)
-    
+
     // 지도 중심 이동
     if (mapRef.current) {
       const { kakao } = window as any
@@ -260,84 +252,62 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
   return (
     <div className={`relative ${className}`}>
       {/* 검색 바 */}
-      <div className="absolute top-4 left-4 right-4 z-10">
-        <div className="bg-white rounded-lg shadow-lg p-2 flex items-center space-x-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                handleSearch()
-              }
-            }}
-            placeholder="장소 검색..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <button
-            onClick={handleSearch}
-            disabled={isSearching}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-        </div>
+      {showSearch && (
+        <div className="absolute top-4 left-4 right-4 z-10">
+          <div className="bg-white rounded-lg shadow-lg p-2 flex items-center space-x-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch()
+                }
+              }}
+              placeholder="장소 검색..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={isSearching}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </div>
 
-        {/* 검색 결과 */}
-        {searchResults.length > 0 && (
-          <div className="mt-2 bg-white rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            {searchResults.map((place, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-              >
-                <button
-                  onClick={() => handleSelectResult(place)}
-                  className="flex-1 text-left"
+          {/* 검색 결과 */}
+          {searchResults.length > 0 && (
+            <div className="mt-2 bg-white rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {searchResults.map((place, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                 >
-                  <div className="font-medium text-sm text-gray-900">{place.place_name}</div>
-                  <div className="text-xs text-gray-500 mt-1">{place.address_name}</div>
-                </button>
-                {onFavoriteAdd && (
                   <button
-                    onClick={() => handleAddFavorite(place)}
-                    className="ml-2 p-1 text-yellow-500 hover:text-yellow-600"
-                    title="즐겨찾기 추가"
+                    onClick={() => handleSelectResult(place)}
+                    className="flex-1 text-left"
                   >
-                    <Star className="h-4 w-4" />
+                    <div className="font-medium text-sm text-gray-900">{place.place_name}</div>
+                    <div className="text-xs text-gray-500 mt-1">{place.address_name}</div>
                   </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 즐겨찾기 목록 */}
-        {showFavorites && favorites && favorites.length > 0 && (
-          <div className="mt-2 bg-white rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            <div className="px-4 py-2 border-b border-gray-200 font-medium text-sm text-gray-900">
-              즐겨찾기
+                  {onFavoriteAdd && (
+                    <button
+                      onClick={() => handleAddFavorite(place)}
+                      className="ml-2 p-1 text-yellow-500 hover:text-yellow-600"
+                      title="즐겨찾기 추가"
+                    >
+                      <Star className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-            {favorites.map((favorite, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  if (mapRef.current) {
-                    const { kakao } = window as any
-                    const moveLatLon = new kakao.maps.LatLng(favorite.lat, favorite.lng)
-                    mapRef.current.setCenter(moveLatLon)
-                    mapRef.current.setLevel(3)
-                  }
-                }}
-                className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-              >
-                <div className="font-medium text-sm text-gray-900">{favorite.name}</div>
-                <div className="text-xs text-gray-500 mt-1">{favorite.address}</div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+          )}
+
+          {/* 즐겨찾기 목록 - Location.tsx에서 관리하므로 제거 됨 */}
+        </div>
+      )}
 
       {/* 지도 컨테이너 */}
       <div
@@ -345,7 +315,7 @@ export const KakaoMap: React.FC<KakaoMapProps> = ({
         className="w-full h-full rounded-lg"
         style={{ minHeight: '400px' }}
       />
-      
+
       {/* 카카오 지도 SDK 미로드 시 안내 */}
       {typeof window !== 'undefined' && !(window as any).kakao && (
         <div className="absolute inset-0 bg-gray-100 rounded-lg flex items-center justify-center">

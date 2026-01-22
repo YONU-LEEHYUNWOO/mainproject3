@@ -11,7 +11,7 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: false, // CORS 문제 해결을 위해 일단 false로 설정
-  timeout: 10000, // 10초 타임아웃 추가
+  timeout: 30000, // AI 응답 대기를 위해 30초로 연장
 })
 
 // 요청 인터셉터: 인증 토큰 추가
@@ -21,13 +21,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    
+
     // 요청 로깅 (디버깅용)
     const fullUrl = `${config.baseURL}${config.url}`
     console.log(`🌐 [${config.method?.toUpperCase()}] ${fullUrl}`)
     console.log('📤 요청 헤더:', config.headers)
     console.log('📤 요청 데이터:', config.data)
-    
+
     return config
   },
   (error) => {
@@ -46,7 +46,7 @@ api.interceptors.response.use(
       console.error('요청 타임아웃:', error)
       return Promise.reject(new Error('서버 응답 시간이 초과되었습니다. 다시 시도해주세요.'))
     }
-    
+
     // 네트워크 오류 처리
     if (!error.response) {
       console.error('네트워크 오류:', error)
@@ -55,7 +55,7 @@ api.interceptors.response.use(
       }
       return Promise.reject(new Error('네트워크 오류가 발생했습니다.'))
     }
-    
+
     // 401 인증 오류 처리
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token')
@@ -65,22 +65,22 @@ api.interceptors.response.use(
       }
       return Promise.reject(new Error('인증이 만료되었습니다. 다시 로그인해주세요.'))
     }
-    
+
     // 403 권한 오류 처리
     if (error.response?.status === 403) {
       return Promise.reject(new Error('접근 권한이 없습니다.'))
     }
-    
+
     // 404 리소스 없음 처리
     if (error.response?.status === 404) {
       return Promise.reject(new Error('요청한 리소스를 찾을 수 없습니다.'))
     }
-    
+
     // 422 유효성 검사 오류 처리
     if (error.response?.status === 422) {
       const detail = error.response.data?.detail
       let errorMessage = '입력한 데이터가 올바르지 않습니다.'
-      
+
       if (Array.isArray(detail)) {
         errorMessage = detail.map((err: any) => {
           const field = err.loc?.join('.') || '알 수 없는 필드'
@@ -89,10 +89,10 @@ api.interceptors.response.use(
       } else if (typeof detail === 'string') {
         errorMessage = detail
       }
-      
+
       return Promise.reject(new Error(errorMessage))
     }
-    
+
     // 500 서버 오류 처리
     if (error.response?.status >= 500) {
       // 백엔드에서 전달된 상세 오류 정보를 프론트엔드 콘솔에 출력
@@ -104,27 +104,27 @@ api.interceptors.response.use(
         traceback: typeof errorDetail === 'object' ? errorDetail?.traceback : null,
         full_response: error.response?.data
       })
-      
+
       // 사용자에게는 간단한 메시지만 표시
-      const userMessage = typeof errorDetail === 'object' && errorDetail?.message 
-        ? errorDetail.message 
+      const userMessage = typeof errorDetail === 'object' && errorDetail?.message
+        ? errorDetail.message
         : '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-      
+
       return Promise.reject(new Error(userMessage))
     }
-    
+
     // 기타 오류 처리
-    const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.detail || 
-                        error.message || 
-                        '알 수 없는 오류가 발생했습니다.'
-    
+    const errorMessage = error.response?.data?.message ||
+      error.response?.data?.detail ||
+      error.message ||
+      '알 수 없는 오류가 발생했습니다.'
+
     console.error('API 오류:', {
       status: error.response?.status,
       message: errorMessage,
       data: error.response?.data
     })
-    
+
     return Promise.reject(new Error(errorMessage))
   }
 )
@@ -169,8 +169,8 @@ export const tasksAPI = {
   toggleComplete: (id: number) =>
     api.patch(`/api/tasks/${id}/complete`),
 
-  getTodayCount: () =>
-    api.get('/api/tasks/today/count'),
+  getTodayCount: (userId?: number) =>
+    api.get('/api/tasks/today/count', { params: { user_id: userId } }),
 }
 
 // AI 채팅 API
@@ -187,6 +187,9 @@ export const aiAPI = {
   getConversations: (params?: any) =>
     api.get('/api/ai/conversations', { params }),
 
+  getProactiveMessage: () =>
+    api.get('/api/ai/proactive'),
+
   getHealth: () =>
     api.get('/api/ai/health'),
 }
@@ -195,6 +198,12 @@ export const aiAPI = {
 export const guardiansAPI = {
   getGuardians: () =>
     api.get('/api/guardians/'),
+
+  getManagedUsers: () =>
+    api.get('/api/guardians/managed-users'),
+
+  getParentReport: (parentId: number) =>
+    api.get(`/api/guardians/parents/${parentId}/report`),
 
   createGuardian: (guardian: any) =>
     api.post('/api/guardians/', guardian),
@@ -238,11 +247,11 @@ export const medicineAPI = {
   markTaken: (alarmId: number) =>
     api.post('/api/medicine/taken', { alarm_id: alarmId }),
 
-  getTodayAlarms: () =>
-    api.get('/api/medicine/today'),
+  getTodayAlarms: (userId?: number) =>
+    api.get('/api/medicine/today', { params: { user_id: userId } }),
 
-  getDueAlarms: () =>
-    api.get('/api/medicine/due-now'),
+  getDueAlarms: (userId?: number) =>
+    api.get('/api/medicine/due-now', { params: { user_id: userId } }),
 
   toggleAlarm: (id: number) =>
     api.patch(`/api/medicine/alarms/${id}/toggle`),
@@ -261,6 +270,49 @@ export const notificationLogsAPI = {
 
   updateLog: (id: number, logData: any) =>
     api.put(`/api/notification-logs/${id}`, logData),
+}
+
+// 즐겨찾는 장소 API
+export const favoritesAPI = {
+  getFavorites: (userId?: number) =>
+    api.get('/api/favorites/', { params: { user_id: userId } }),
+
+  createFavorite: (favorite: { name: string; category: string; address: string; latitude: number; longitude: number; is_primary?: boolean }, userId?: number) =>
+    api.post('/api/favorites/', favorite, { params: { user_id: userId } }),
+
+  deleteFavorite: (id: number) =>
+    api.delete(`/api/favorites/${id}`),
+
+  setPrimary: (id: number) =>
+    api.patch(`/api/favorites/${id}/set-primary`),
+}
+
+// 위치 및 경로 API
+export const locationAPI = {
+  // 현재 위치 저장
+  saveLocation: (data: { latitude: number; longitude: number; accuracy: number; address?: string }) =>
+    api.post('/api/location/', { ...data, location_type: 'current' }),
+
+  // 현재 사용자 최신 위치 조회
+  getMyLocation: () =>
+    api.get('/api/location/current'),
+
+  // 부모님 위치 조회
+  getParentLocation: (parentId: number) =>
+    api.get(`/api/location/parent/${parentId}`),
+
+  // 위치 공유 설정 토글
+  toggleSharing: (enabled: boolean) =>
+    api.patch(`/api/location/sharing`, null, { params: { enabled } }),
+
+  // 경로 계산
+  getRoute: (origin: { lat: number; lng: number }, dest: { lat: number; lng: number }) =>
+    api.post('/api/location/route', {
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      dest_lat: dest.lat,
+      dest_lng: dest.lng
+    }),
 }
 
 export default api

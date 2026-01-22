@@ -8,12 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
-from datetime import datetime
+import traceback
+from datetime import datetime, date as date_class, time as time_class, datetime as datetime_class
+from utils.logger import log_info, log_error, log_warning
 
 from database import get_db
 from auth import get_current_user
 from models.user import User
 from models.task import Task
+from models.guardian import Guardian
 from schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskListResponse, TaskFilter
 )
@@ -144,8 +147,6 @@ async def create_task(
     새 일정 생성
     SQLAlchemy ORM 객체를 dict로 변환하고, 모든 날짜/시간 객체를 문자열로 변환하여 반환합니다.
     """
-    from utils.logger import log_info, log_error
-    
     log_info(f"[CREATE_TASK] 함수 시작 - user_id={current_user.id}, title={task.title}, date={task.date}, time={task.time}")
     try:
         
@@ -217,7 +218,25 @@ async def create_task(
             task_reminder_minutes = getattr(task, 'reminder_minutes', 0)
             task_category = getattr(task, 'category', '일반')
             
-            log_info(f"[CREATE_TASK] Task 객체 생성 시도 - title={task_title}, date={task_date}, time={task_time}")
+            # 대상 사용자 ID 결정 (보호자 모드 지원)
+            target_owner_id = current_user.id
+            request_owner_id = getattr(task, 'owner_id', None)
+            
+            if request_owner_id and request_owner_id != current_user.id:
+                # 보호자 관계 확인
+                guardian = db.query(Guardian).filter(
+                    Guardian.user_id == request_owner_id,
+                    Guardian.guardian_user_id == current_user.id
+                ).first()
+                if not guardian:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="해당 사용자의 일정을 등록할 권한이 없습니다."
+                    )
+                target_owner_id = request_owner_id
+                log_info(f"[CREATE_TASK] 보호자 대리 등록: guardian={current_user.id}, target={target_owner_id}")
+
+            log_info(f"[CREATE_TASK] Task 객체 생성 시도 - title={task_title}, date={task_date}, time={task_time}, owner_id={target_owner_id}")
             
             db_task = Task(
                 title=task_title,
@@ -231,7 +250,7 @@ async def create_task(
                 priority=task_priority,
                 reminder_minutes=task_reminder_minutes,
                 category=task_category,
-                owner_id=current_user.id
+                owner_id=target_owner_id
             )
             log_info(f"[CREATE_TASK] Task 객체 생성 완료 - id={db_task.id if hasattr(db_task, 'id') else 'N/A'}, title={db_task.title}")
         except Exception as e:
@@ -262,7 +281,6 @@ async def create_task(
             status_code=status.HTTP_201_CREATED
         )
     except Exception as e:
-        from utils.logger import log_error
         log_error(f"[CREATE_TASK] 일정 생성 오류: {type(e).__name__}: {str(e)}", exc_info=e)
         
         # 롤백
@@ -415,27 +433,43 @@ async def toggle_task_completion(
             "id": task.id,
             "completed": task.completed
         },
-        message="일정이 완료 처리되었습니다" if task.completed else "일정 완료가 해제되었습니다"
+            message="일정이 완료 처리되었습니다" if task.completed else "일정 완료가 해제되었습니다"
     )
 
 @router.get("/today/count")
 async def get_today_tasks_count(
+    user_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    오늘의 일정 개수 조회
+    오늘의 일정 개수 조회 (보호자 권한 지원)
     """
     from datetime import date
     today = date.today()
+    
+    # 대상 사용자 ID 결정
+    target_id = current_user.id
+    if user_id and user_id != current_user.id:
+        # 권한 확인 (보호자 관계인지)
+        guardian = db.query(Guardian).filter(
+            Guardian.user_id == user_id, 
+            Guardian.guardian_user_id == current_user.id
+        ).first()
+        if not guardian:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="해당 사용자의 정보를 볼 권한이 없습니다."
+            )
+        target_id = user_id
 
     total_count = db.query(Task).filter(
-        and_(Task.owner_id == current_user.id, Task.date == today)
+        and_(Task.owner_id == target_id, Task.date == today)
     ).count()
 
     completed_count = db.query(Task).filter(
         and_(
-            Task.owner_id == current_user.id,
+            Task.owner_id == target_id,
             Task.date == today,
             Task.completed == True
         )

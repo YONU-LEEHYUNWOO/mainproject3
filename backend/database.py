@@ -166,6 +166,20 @@ def get_db():
                 except Exception as column_error:
                     print(f"GET_DB ERROR checking/adding user_type column: {column_error}")
                     db.rollback()
+
+            # favorite_places 테이블의 is_primary 컬럼 확인 및 추가
+            if 'favorite_places' in tables:
+                try:
+                    result = db.execute(text("PRAGMA table_info(favorite_places)"))
+                    columns = [row[1] for row in result.fetchall()]
+                    if 'is_primary' not in columns:
+                        print("GET_DB WARNING: is_primary column not found in favorite_places! Adding now...")
+                        db.execute(text("ALTER TABLE favorite_places ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT 0"))
+                        db.commit()
+                        print("GET_DB SUCCESS: is_primary column added to favorite_places!")
+                except Exception as e:
+                    print(f"GET_DB ERROR checking/adding is_primary column: {e}")
+                    db.rollback()
         except Exception as table_check_error:
             print(f"GET_DB ERROR checking tables: {table_check_error}")
             # 테이블 확인 실패해도 계속 진행 (쿼리 시 오류 처리)

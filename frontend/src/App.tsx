@@ -34,8 +34,8 @@ function App() {
             <Layout mode="parent" />
           </ProtectedRoute>
         }>
-          <Route index element={<Tasks />} />
-          <Route path="dashboard" element={<Tasks />} />
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="chat" element={<Chat />} />
           <Route path="medicine" element={<Medicine />} />

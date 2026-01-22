@@ -179,7 +179,7 @@ async def analyze_text(
     """
     try:
         # AI 분석 수행
-        analysis_result = ai_service.analyze_text(
+        analysis_result = await ai_service.analyze_text(
             text=request.text,
             analysis_type=request.analysis_type
         )
@@ -236,7 +236,7 @@ async def extract_schedule(
     텍스트에서 일정 관련 정보를 추출합니다.
     """
     try:
-        result = ai_service.extract_schedule(request.text)
+        result = await ai_service.extract_schedule(request.text)
 
         # 추출 결과가 있으면 AI 대화로 저장
         if result.get("extracted_tasks"):
@@ -280,7 +280,7 @@ async def chat_with_ai(
     """
     try:
         # AI 응답 생성
-        chat_result = ai_service.chat_response(
+        chat_result = await ai_service.chat_response(
             message=request.message,
             conversation_type="general",  # 추후 분석을 통해 결정
             context=request.context
@@ -325,6 +325,7 @@ async def chat_with_ai(
         return success_response(
             data={
                 "ai_response": chat_result.get("message", ""),
+                "action": chat_result.get("action"),
                 "conversation_type": chat_result.get("conversation_type", "general"),
                 "confidence": chat_result.get("confidence", 0.0)
             },
@@ -359,6 +360,57 @@ async def get_conversations(
         },
         message="성공"
     )
+
+@router.get("/proactive")
+async def get_proactive_message(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    능동형 케어 메시지 생성
+    현재 시간, 일정, 복약 현황을 기반으로 AI가 먼저 제안할 메시지를 생성합니다.
+    """
+    try:
+        from models.task import Task
+        from models.medicine_alarm import MedicineAlarm
+        from datetime import date, datetime
+        
+        today = date.today()
+        now = datetime.now()
+        
+        # 1. 오늘 일정 가져오기
+        tasks = db.query(Task).filter(
+            Task.owner_id == current_user.id,
+            Task.date == today
+        ).all()
+        
+        # 2. 지금 복용해야 하거나 오늘 예정된 약 가져오기
+        medicines = db.query(MedicineAlarm).filter(
+            MedicineAlarm.user_id == current_user.id,
+            MedicineAlarm.is_active == True
+        ).all()
+        
+        # 컨텍스트 요약
+        context = {
+            "current_time": now.strftime("%H:%M"),
+            "today_date": today.strftime("%Y-%m-%d"),
+            "tasks": [{"title": t.title, "time": t.time.strftime("%H:%M") if t.time else "하루 종일", "completed": t.completed} for t in tasks],
+            "medicines": [{"name": m.medicine_name, "next_reminder": m.next_reminder.strftime("%H:%M") if m.next_reminder else None} for m in medicines if m.is_active]
+        }
+        
+        # 3. AI 서비스로 메시지 생성
+        proactive_result = await ai_service.generate_proactive_message(context)
+        
+        return success_response(
+            data=proactive_result,
+            message="능동형 메시지가 생성되었습니다"
+        )
+    except Exception as e:
+        log_error(f"능동형 메시지 생성 오류: {e}")
+        return success_response(
+            data={"message": "오늘도 건강하고 활기찬 하루 보내세요! 😊", "action": None},
+            message="기본 메시지를 반환합니다"
+        )
 
 @router.get("/health")
 async def ai_service_health():
