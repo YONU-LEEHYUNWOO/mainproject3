@@ -279,11 +279,26 @@ async def chat_with_ai(
     AI와 자연스러운 대화를 나눕니다.
     """
     try:
+        # 사용자 즐겨찾기 장소 조회 (AI 컨텍스트용)
+        from models.favorite_place import FavoritePlace
+        favorites_query = db.query(FavoritePlace).filter(FavoritePlace.user_id == current_user.id).all()
+        favorites_list = [
+            {"name": f.name, "category": f.category, "address": f.address}
+            for f in favorites_query
+        ]
+        
+        # 컨텍스트 업데이트
+        if request.context is None:
+            request.context = {}
+        request.context["favorites"] = favorites_list
+
         # AI 응답 생성
         chat_result = await ai_service.chat_response(
             message=request.message,
             conversation_type="general",  # 추후 분석을 통해 결정
-            context=request.context
+            context=request.context,
+            latitude=request.latitude,
+            longitude=request.longitude
         )
 
         # 채팅 메시지 저장 (사용자 메시지)

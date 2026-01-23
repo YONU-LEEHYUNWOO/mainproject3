@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { favoritesAPI, tasksAPI, medicineAPI, guardiansAPI } from '../services/api'
+import { favoritesAPI, tasksAPI, medicineAPI, guardiansAPI, inactivityAPI } from '../services/api'
 import {
   Calendar,
   MessageSquare,
@@ -11,6 +11,7 @@ import {
   MapPin,
   Home,
   Heart,
+  Moon,
   Utensils,
   ShoppingCart,
   Plus,
@@ -58,6 +59,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [managedUserId, setManagedUserId] = useState<number | null>(null)
+  const [inactivityStatus, setInactivityStatus] = useState<any>(null)
 
   // 음성 비서 상태
   const {
@@ -73,6 +75,23 @@ const Dashboard = () => {
   useEffect(() => {
     loadDashboardData()
   }, [])
+
+  // 실시간 무활동 상태 폴링 (1분마다)
+  useEffect(() => {
+    if (mode === 'child' && managedUserId) {
+      const fetchStatus = async () => {
+        try {
+          const res = await inactivityAPI.getStatus(managedUserId)
+          if (res.data) setInactivityStatus(res.data)
+        } catch (error) {
+          console.error('실시간 상태 업데이트 오류:', error)
+        }
+      }
+
+      const interval = setInterval(fetchStatus, 60000)
+      return () => clearInterval(interval)
+    }
+  }, [mode, managedUserId])
 
   const loadDashboardData = async () => {
     try {
@@ -92,11 +111,18 @@ const Dashboard = () => {
         }
       }
 
-      const [tasksResponse, medicinesResponse, dueResponse, favoritesResponse] = await Promise.all([
+      const [
+        tasksResponse,
+        medicinesResponse,
+        dueResponse,
+        favoritesResponse,
+        inactivityResponse
+      ] = await Promise.all([
         tasksAPI.getTodayCount(targetId),
         medicineAPI.getTodayAlarms(targetId),
         medicineAPI.getDueAlarms(targetId),
-        favoritesAPI.getFavorites(targetId)
+        favoritesAPI.getFavorites(targetId),
+        targetId ? inactivityAPI.getStatus(targetId) : Promise.resolve({ data: null })
       ])
 
       setStats({
@@ -105,6 +131,10 @@ const Dashboard = () => {
         dueMedicines: dueResponse.data.data.due_alarms || []
       })
       setFavorites(favoritesResponse.data.data || [])
+
+      if (inactivityResponse?.data) {
+        setInactivityStatus(inactivityResponse.data)
+      }
     } catch (error) {
       console.error('대시보드 데이터 로드 오류:', error)
     } finally {
@@ -235,6 +265,43 @@ const Dashboard = () => {
           </p>
         </div>
       </div>
+
+      {/* 자녀 모드: 부모님 실시간 상태 배너 */}
+      {mode === 'child' && inactivityStatus && (
+        <div className={`shadow-sm rounded-xl border-l-8 p-5 mt-6 mb-6 flex items-center justify-between transition-all ${inactivityStatus.status === 'Active' ? 'bg-green-50 border-green-500' :
+            inactivityStatus.status === 'Sleep' ? 'bg-indigo-50 border-indigo-500' :
+              'bg-red-50 border-red-500'
+          }`}>
+          <div className="flex items-center">
+            <div className={`p-3 rounded-2xl mr-4 ${inactivityStatus.status === 'Active' ? 'bg-green-100 text-green-600' :
+                inactivityStatus.status === 'Sleep' ? 'bg-indigo-100 text-indigo-600' :
+                  'bg-red-100 text-red-600 shadow-sm'
+              }`}>
+              {inactivityStatus.status === 'Active' ? <Heart className="h-8 w-8" /> :
+                inactivityStatus.status === 'Sleep' ? <Moon className="h-8 w-8" /> :
+                  <AlertTriangle className="h-8 w-8 animate-pulse" />}
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 leading-tight">
+                부모님은 지금 {
+                  inactivityStatus.status === 'Active' ? <span className="text-green-600">정상 활동 중</span> :
+                    inactivityStatus.status === 'Sleep' ? <span className="text-indigo-600">취침 중</span> :
+                      <span className="text-red-600">무활동 감지됨</span>
+                }
+              </h3>
+              <p className="text-sm text-gray-600 mt-1 font-medium">{inactivityStatus.message}</p>
+            </div>
+          </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-xs text-gray-400">
+              마지막 체크: {new Date().toLocaleTimeString()}
+            </p>
+            <Link to="/child/monitoring" className="text-xs font-bold text-blue-600 mt-2 inline-block hover:underline">
+              상세 보기 →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* 빠른 길안내 - 부모 모드에서만 핵심 기능으로 상단 배치 */}
       {mode === 'parent' && (

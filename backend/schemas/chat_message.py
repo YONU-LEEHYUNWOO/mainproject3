@@ -40,6 +40,8 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     message_type: str = Field("text", max_length=50)
     context: Optional[dict] = None  # 추가 컨텍스트 정보
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class ChatResponse(BaseModel):
     """채팅 응답 스키마"""

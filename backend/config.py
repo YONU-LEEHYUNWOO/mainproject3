@@ -26,8 +26,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30, 
 
 # AI API 설정 - 직접 os.getenv() 사용 (더 확실함)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY", "")
-# 모델명 원복 (안정적인 1.5 Flash 사용)
-GEMINI_MODEL = "gemini-1.5-flash"
+# 모델명 (.env 파일의 원래 설정 복원)
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # 디버그: 실제 값 확인
 print(f"DEBUG: Final GEMINI_API_KEY = {'***' + GEMINI_API_KEY[-4:] if GEMINI_API_KEY else 'EMPTY'}")

@@ -12,7 +12,8 @@ import {
   BarChart3,
   MapPin,
   Activity,
-  Heart
+  Heart,
+  Bell
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -41,6 +42,7 @@ const Layout = ({ mode }: LayoutProps) => {
     { name: '약 관리', href: '/child/medicine', icon: Pill },
     { name: '위치', href: '/child/location', icon: MapPin },
     { name: '모니터링', href: '/child/monitoring', icon: Activity },
+    { name: '알림 설정', href: '/child/notifications', icon: Bell },
     { name: '설정', href: '/child/settings', icon: Settings },
   ]
 
@@ -97,8 +99,8 @@ const Layout = ({ mode }: LayoutProps) => {
                     key={item.name}
                     to={item.href}
                     className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${isActive
-                        ? 'bg-blue-100 text-blue-900'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-blue-100 text-blue-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                   >
                     <Icon

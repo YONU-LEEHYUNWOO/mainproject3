@@ -8,6 +8,9 @@ import { TaskItem } from '../components/TaskItem'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { EmptyState } from '../components/EmptyState'
 import { useNotifications } from '../hooks/useNotifications'
+import { useLocation as useGeoLocation } from '../hooks/useLocation'
+import { TaskDetailModal } from '../components/TaskDetailModal'
+import { useGuardianLocation } from '../hooks/useGuardianLocation'
 
 interface Task {
   id: number
@@ -33,6 +36,19 @@ const Tasks = () => {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
 
+  // 상세 모달 및 수정 관련 상태
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+
+  // 현재 위치 정보 (본인)
+  const { currentLocation } = useGeoLocation(mode)
+  // 보호자 모드용 부모님 위치
+  const { parentLocation } = useGuardianLocation(mode)
+
+  // 검색/분석에 사용할 기준 위치 (부모 모드면 본인, 자녀 모드면 부모님)
+  const baseLocation = mode === 'parent' ? currentLocation : parentLocation
+
   // 알림 시스템
   const { permission, settings, requestPermission, scheduleTaskNotification, saveSettings } = useNotifications()
 
@@ -43,12 +59,12 @@ const Tasks = () => {
   const loadTasks = async () => {
     try {
       const response = await tasksAPI.getTasks()
-      
+
       // 백엔드 응답 형식에 따라 데이터 추출
       // 새로운 응답 형식: {status, message, data: {tasks, total, ...}}
       // 기존 형식 호환성 유지
       const tasksData = response.data.data?.tasks || response.data.tasks || []
-      
+
       // 배열이 아닌 경우 빈 배열로 설정
       const safeTasksData = Array.isArray(tasksData) ? tasksData : []
       setTasks(safeTasksData)
@@ -138,25 +154,44 @@ const Tasks = () => {
 
   // 날짜 선택 핸들러
   const handleDateSelect = (date: Date) => {
-    console.log('날짜 선택됨:', date)
-    console.log('날짜 toISOString:', date.toISOString())
-    console.log('날짜 toLocaleDateString:', date.toLocaleDateString())
     setSelectedDate(date)
+  }
+
+  // 일정 클릭 핸들러 (상세 보기)
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task)
+    setIsDetailModalOpen(true)
   }
 
   // 새 일정 추가 핸들러
   const handleNewTask = () => {
+    setEditingTask(null)
     setIsTaskFormOpen(true)
   }
 
-  // 일정 생성 핸들러
-  const handleCreateTask = async (taskData: any) => {
+  // 일정 수정 핸들러 (상세 모달에서 호출)
+  const handleEditClick = (task: Task) => {
+    setEditingTask(task)
+    setIsDetailModalOpen(false)
+    setIsTaskFormOpen(true)
+  }
+
+  // 일정 생성/수정 핸들러
+  const handleSaveTask = async (taskData: any) => {
     try {
-      console.log('보내는 일정 데이터:', taskData)
-      const response = await tasksAPI.createTask(taskData)
-      console.log('일정 생성 응답:', response)
+      if (editingTask) {
+        // 수정 모드
+        await tasksAPI.updateTask(editingTask.id, taskData)
+        console.log('✅ 일정 수정 성공')
+      } else {
+        // 생성 모드
+        await tasksAPI.createTask(taskData)
+        console.log('✅ 일정 생성 성공')
+      }
+
       await loadTasks() // 목록 새로고침
       setIsTaskFormOpen(false) // 모달 닫기
+      setEditingTask(null)
     } catch (error: any) {
       console.error('일정 생성 오류:', error)
       console.error('오류 응답:', error.response?.data)
@@ -295,6 +330,7 @@ const Tasks = () => {
                         key={task.id}
                         task={task}
                         onToggleComplete={handleToggleComplete}
+                        onClick={handleTaskClick}
                       />
                     ))}
                   </div>
@@ -326,6 +362,7 @@ const Tasks = () => {
                     key={task.id}
                     task={task}
                     onToggleComplete={handleToggleComplete}
+                    onClick={handleTaskClick}
                   />
                 ))}
               </div>
@@ -334,12 +371,25 @@ const Tasks = () => {
         </div>
       )}
 
-      {/* 일정 추가 폼 */}
+      {/* 일정 추가/수정 폼 */}
       <TaskForm
         isOpen={isTaskFormOpen}
-        onClose={() => setIsTaskFormOpen(false)}
-        onSubmit={handleCreateTask}
+        onClose={() => {
+          setIsTaskFormOpen(false)
+          setEditingTask(null)
+        }}
+        onSubmit={handleSaveTask}
         selectedDate={selectedDate}
+        initialData={editingTask}
+        currentLocation={baseLocation}
+      />
+      {/* 일정 상세 모달 */}
+      <TaskDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
+        onEdit={handleEditClick}
+        task={selectedTask}
+        currentLocation={baseLocation}
       />
     </div>
   )

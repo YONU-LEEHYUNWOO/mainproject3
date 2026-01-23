@@ -171,6 +171,9 @@ export const tasksAPI = {
 
   getTodayCount: (userId?: number) =>
     api.get('/api/tasks/today/count', { params: { user_id: userId } }),
+
+  analyzeTask: (id: number, params?: { lat?: number; lng?: number }) =>
+    api.get(`/api/tasks/${id}/analyze`, { params }),
 }
 
 // AI 채팅 API
@@ -181,7 +184,7 @@ export const aiAPI = {
   extractSchedule: (text: string) =>
     api.post('/api/ai/schedule-extract', { text }),
 
-  chat: (data: { message: string; message_type?: string; context?: any }) =>
+  chat: (data: { message: string; message_type?: string; context?: any; latitude?: number; longitude?: number }) =>
     api.post('/api/ai/chat', data),
 
   getConversations: (params?: any) =>
@@ -313,6 +316,25 @@ export const locationAPI = {
       dest_lat: dest.lat,
       dest_lng: dest.lng
     }),
+}
+
+// 무활동 감지 API
+export const inactivityAPI = {
+  // 설정 조회
+  getSettings: (targetUserId: number) =>
+    api.get(`/api/inactivity/settings/${targetUserId}`),
+
+  // 설정 업데이트
+  updateSettings: (targetUserId: number, settings: any) =>
+    api.put(`/api/inactivity/settings/${targetUserId}`, settings),
+
+  // 활동 업데이트 (심장박동)
+  updateActivity: (activityType: string = 'heartbeat') =>
+    api.post('/api/inactivity/activity', { activity_type: activityType }),
+
+  // 현재 상태 조회
+  getStatus: (targetUserId: number) =>
+    api.get(`/api/inactivity/status/${targetUserId}`),
 }
 
 export default api

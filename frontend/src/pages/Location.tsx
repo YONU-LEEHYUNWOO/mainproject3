@@ -72,21 +72,27 @@ const Location = () => {
       setKeyword(searchParam)
       setActiveTab('search')
 
-      // SDK 로딩 확인 후 검색 (최대 5회 재시도)
+      // SDK 및 위치 정보 확인 후 검색
       let retryCount = 0
       const trySearch = () => {
-        if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+        const baseLocation = (mode === 'parent' && currentLocation)
+          ? currentLocation
+          : (mode === 'child' && parentLocation)
+            ? parentLocation
+            : null
+
+        if (window.kakao && window.kakao.maps && window.kakao.maps.services && (baseLocation || retryCount >= 10)) {
           performSearch(searchParam)
           initialSearchPerformed.current = true
-        } else if (retryCount < 5) {
+        } else if (retryCount < 10) {
           retryCount++
-          console.log(`🔍 SDK 대화 중... (${retryCount}/5)`)
+          console.log(`🔍 SDK 또는 위치 대기 중... (${retryCount}/10)`)
           setTimeout(trySearch, 500)
         }
       }
       trySearch()
     }
-  }, [searchParam])
+  }, [searchParam, currentLocation, parentLocation])
 
   // 검색 로직 분리
   const performSearch = (query: string) => {
@@ -114,11 +120,11 @@ const Location = () => {
       size: 15 // 검색 결과 개수
     }
 
-    // 현재 위치가 있으면 위치 기반 검색
+    // 현재 위치가 있으면 위치 기반 검색 (정확도 우선)
     if (baseLocation) {
       searchOptions.location = new window.kakao.maps.LatLng(baseLocation.latitude, baseLocation.longitude)
-      searchOptions.radius = 5000 // 5km 반경
-      console.log('🔍 위치 기반 검색:', baseLocation.latitude, baseLocation.longitude, '반경 5km')
+      searchOptions.sort = window.kakao.maps.services.SortBy.ACCURACY
+      console.log('🔍 위치 기반 검색:', baseLocation.latitude, baseLocation.longitude, '정확도 우선')
     } else {
       console.log('🔍 전국 검색 (현재 위치 없음)')
     }
@@ -167,18 +173,19 @@ const Location = () => {
   }
 
   const handleAddStart = async (place: Place) => {
-    await addFavorite(
-      place.place_name,
-      place.road_address_name || place.address_name,
-      parseFloat(place.y),
-      parseFloat(place.x),
-      'other'
-    )
-    alert('즐겨찾기에 추가되었습니다.')
+    const success = await addFavorite(place)
+    if (success) {
+      alert('즐겨찾기에 추가되었습니다.')
+    } else {
+      alert('즐겨찾기 추가에 실패했습니다.')
+    }
   }
 
-  const handleRemoveStar = async (favoriteId: number) => {
-    await removeFavorite(favoriteId)
+  const handleRemoveStar = async (e: React.MouseEvent, favoriteId: number) => {
+    e.stopPropagation()
+    if (window.confirm('즐겨찾기에서 삭제하시겠습니까?')) {
+      await removeFavorite(favoriteId)
+    }
   }
 
   // Route State
@@ -312,8 +319,8 @@ const Location = () => {
                 <h3 className="font-bold text-lg text-gray-800">{selectedPlace.place_name}</h3>
                 <p className="text-sm text-gray-600 mt-1">{selectedPlace.road_address_name || selectedPlace.address_name}</p>
                 <div className="flex items-center gap-3 mt-2 text-sm text-gray-700">
-                  <span className="flex items-center gap-1"><MapPin className="h-4 w-4 text-blue-500" /> {(routeData.distance / 1000).toFixed(1)}km</span>
-                  <span className="flex items-center gap-1"><Clock className="h-4 w-4 text-orange-500" /> 차로 약 {Math.round(routeData.duration / 60)}분</span>
+                  <span className="flex items-center gap-1"><MapPin className="h-4 w-4 text-blue-500" /> {((routeData?.distance || 0) / 1000).toFixed(1)}km</span>
+                  <span className="flex items-center gap-1"><Clock className="h-4 w-4 text-orange-500" /> 차로 약 {Math.round((routeData?.duration || 0) / 60)}분</span>
                 </div>
               </div>
               <button onClick={() => setSelectedPlace(null)} className="text-gray-400 hover:text-gray-600">
@@ -480,7 +487,8 @@ const Location = () => {
                     address_name: fav.address,
                     x: fav.longitude.toString(),
                     y: fav.latitude.toString(),
-                    road_address_name: fav.address
+                    road_address_name: fav.address,
+                    category_group_name: fav.category // 추가: 카테고리 정보 누락 방지
                   })}>
                     <div className="font-medium flex items-center gap-2">
                       {fav.name}
@@ -489,7 +497,7 @@ const Location = () => {
                     <div className="text-sm text-gray-600 mt-1">{fav.address}</div>
                   </div>
                   <button
-                    onClick={() => handleRemoveStar(fav.id)}
+                    onClick={(e) => handleRemoveStar(e, fav.id)}
                     className="p-2 text-gray-400 hover:text-red-500 transition"
                     title="즐겨찾기 삭제"
                   >

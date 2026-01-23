@@ -23,7 +23,95 @@ from schemas.task import (
 from utils.response import success_response
 from utils.serializer import orm_to_dict, serialize_datetime_objects
 
+# AI 분석 및 경로 서비스
+from services.ai_service import AIService
+from services.kakao_service import KakaoService
+ai_service = AIService()
+
 router = APIRouter()
+
+@router.get("/{task_id}/analyze")
+async def analyze_task_travel(
+    task_id: int,
+    lat: Optional[float] = Query(None, description="현재 위도"),
+    lng: Optional[float] = Query(None, description="현재 경도"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    일정 상세 분석 (이동 시간, 추천 출발 시간, AI 가이드)
+    """
+    # 1. 일정 조회
+    task = db.query(Task).filter(Task.id == task_id).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다")
+    
+    # 권한 확인: 본인 일정이거나, 보호자 관계인 경우
+    if task.owner_id != current_user.id:
+        from models.guardian import Guardian
+        is_guardian = db.query(Guardian).filter(
+            Guardian.guardian_user_id == current_user.id,
+            Guardian.user_id == task.owner_id
+        ).first()
+        if not is_guardian:
+            raise HTTPException(status_code=403, detail="일정 분석 권한이 없습니다")
+    
+    if not task.latitude or not task.longitude:
+        return success_response(
+            data={"guide": "장소 좌표 정보가 없어 이동 분석을 할 수 없습니다.", "departure_time": None},
+            message="좌표 정보 부족"
+        )
+
+    # 2. 실시간 경로 계산 (카카오 API)
+    # 현재 위치가 없으면 마지막 알려진 위치 사용 고려 (여기서는 간단히 필수 처리 또는 에러)
+    if lat is None or lng is None:
+        # 사용자 최근 위치 조회
+        from models.location import Location
+        last_loc = db.query(Location).filter(Location.user_id == current_user.id).order_by(Location.created_at.desc()).first()
+        if last_loc:
+            lat, lng = last_loc.latitude, last_loc.longitude
+        else:
+            return success_response(
+                data={"guide": "현재 위치 정보를 알 수 없어 이동 분석이 불가능합니다.", "departure_time": None},
+                message="현재 위치 정보 없음"
+            )
+
+    try:
+        route_data = KakaoService.get_route(
+            origin_x=lng, origin_y=lat,
+            destination_x=task.longitude, destination_y=task.latitude
+        )
+        
+        if not route_data:
+            return success_response(
+                data={"guide": "경로를 찾을 수 없습니다.", "departure_time": None},
+                message="경로 검색 불가"
+            )
+
+        # 3. AI 가이드 생성
+        task_info = {"title": task.title, "location": task.location, "time": task.time.strftime("%H:%M") if task.time else None}
+        ai_guide = await ai_service.generate_task_guide(task_info, route_data)
+        
+        return success_response(
+            data={
+                "route": {
+                    "distance": route_data["distance"],
+                    "duration": route_data["duration"],
+                    "fare": route_data["fare"]
+                },
+                "guide": ai_guide.get("guide"),
+                "departure_time": ai_guide.get("departure_time")
+            },
+            message="분석 완료"
+        )
+        
+    except Exception as e:
+        log_error(f"Task analysis endpoint error: {e}")
+        return success_response(
+            data={"guide": "분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", "departure_time": None},
+            message="분석 오류"
+        )
 
 # 테스트 엔드포인트 (인증 없이 접근 가능)
 @router.get("/test")
@@ -361,7 +449,23 @@ async def update_task(
         update_data = task_update.dict(exclude_unset=True)
     
     for field, value in update_data.items():
-        setattr(task, field, value)
+        if field == 'date' and value:
+            try:
+                # date 문자열을 객체로 변환
+                setattr(task, field, datetime_class.strptime(value, "%Y-%m-%d").date())
+            except ValueError:
+                log_warning(f"[UPDATE_TASK] date 변환 실패: {value}")
+                continue
+        elif field == 'time' and value:
+            try:
+                # time 문자열을 객체로 변환
+                hour, minute = map(int, value.strip().split(':'))
+                setattr(task, field, time_class(hour=hour, minute=minute))
+            except (ValueError, AttributeError):
+                log_warning(f"[UPDATE_TASK] time 변환 실패: {value}")
+                setattr(task, field, None)
+        else:
+            setattr(task, field, value)
 
     db.commit()
     db.refresh(task)

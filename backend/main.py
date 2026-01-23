@@ -27,23 +27,7 @@ app = FastAPI(
     }
 )
 
-# 시작 시 설정 출력
-@app.on_event("startup")
-async def startup_event():
-    try:
-        from config import GEMINI_MODEL, GEMINI_API_KEY
-    except ImportError:
-        try:
-            from backend.config import GEMINI_MODEL, GEMINI_API_KEY
-        except ImportError:
-            GEMINI_MODEL = "UNKNOWN"
-            GEMINI_API_KEY = ""
-            
-    print("\n" + "="*60)
-    print(f"🚀 [AI CONFIG CHECK]")
-    print(f"✅ Loaded Model: {GEMINI_MODEL}")
-    print(f"✅ API Key: {'*' * 10}{GEMINI_API_KEY[-4:] if GEMINI_API_KEY else 'NOT FOUND'}")
-    print("="*60 + "\n")
+# 시작 시 설정 출력 (기능이 하단 startup_event로 통합됨)
 
 # 요청 로깅 미들웨어 추가 (CORS 미들웨어보다 먼저)
 # 로거 import를 모듈 레벨로 이동 (캐시 문제 방지)
@@ -189,6 +173,7 @@ try:
         Base, User, Task, ChatMessage, AIConversation, 
         Guardian, Medicine, MedicineAlarm, NotificationLog
     )
+    from models.inactivity import InactivitySettings, InactivityLog
     from database import engine, create_tables
     from config import DATABASE_URL
     print("모델 import 완료")
@@ -197,76 +182,40 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-# 애플리케이션 시작 시 테이블 생성
+# 애플리케이션 시작 시 데이터베이스 및 AI 설정 초기화
 @app.on_event("startup")
 async def startup_event():
-    """애플리케이션 시작 시 실행되는 이벤트"""
+    """애플리케이션 시작 시 실행되는 이벤트 (DB 초기화, AI 설정 확인)"""
+    print("\n" + "="*60)
+    print("🚀 서버 초기화 프로세스 시작...")
+    
+    # 1. AI 설정 확인
     try:
-        print("데이터베이스 테이블 초기화 시작...")
-        
-        # 데이터베이스 파일 경로 확인
-        import os
-        # 상대 import 사용 (run.py에서 sys.path 추가 후 모듈로 실행)
-        # 이미 상단에서 import한 것을 사용
-        db_path = DATABASE_URL.replace("sqlite:///", "")
-        if os.path.exists(db_path):
-            print(f"📁 기존 데이터베이스 파일 발견: {db_path}")
-        else:
-            print(f"📁 새 데이터베이스 파일 생성: {db_path}")
-        
-        # 테이블 생성 (이미 상단에서 import한 create_tables 사용)
-        create_tables()
-        
-        # 생성된 테이블 확인
-        from sqlalchemy import inspect, text
-        inspector = inspect(engine)
-        existing_tables = inspector.get_table_names()
-        print(f"데이터베이스 테이블 초기화 완료")
-        print(f"생성된 테이블 목록: {existing_tables}")
-        
-        # users 테이블이 있는지 확인하고 없으면 생성
-        if 'users' not in existing_tables:
-            print("WARNING: users table not found! Creating manually...")
-            # 직접 SQL 실행하여 테이블 생성
-            try:
-                with engine.begin() as conn:
-                    conn.execute(text("""
-                        CREATE TABLE IF NOT EXISTS users (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            username VARCHAR(50) NOT NULL UNIQUE,
-                            email VARCHAR(100) NOT NULL UNIQUE,
-                            hashed_password VARCHAR(255) NOT NULL,
-                            full_name VARCHAR(100),
-                            phone VARCHAR(20),
-                            user_type VARCHAR(20) NOT NULL DEFAULT 'parent',
-                            is_active BOOLEAN NOT NULL DEFAULT 1,
-                            is_superuser BOOLEAN NOT NULL DEFAULT 0,
-                            last_login DATETIME,
-                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """))
-                print("SUCCESS: users table created manually!")
-                
-                # 다시 테이블 목록 확인
-                inspector = inspect(engine)
-                existing_tables = inspector.get_table_names()
-                print(f"Updated table list: {existing_tables}")
-                
-                if 'users' not in existing_tables:
-                    print("CRITICAL: users table still not found after creation attempt!")
-                else:
-                    print("VERIFIED: users table exists!")
-            except Exception as table_error:
-                print(f"ERROR creating users table: {table_error}")
-                import traceback
-                traceback.print_exc()
-                # 계속 진행 (get_db에서 다시 시도할 것)
+        from config import GEMINI_MODEL, GEMINI_API_KEY
+    except ImportError:
+        try:
+            from backend.config import GEMINI_MODEL, GEMINI_API_KEY
+        except ImportError:
+            GEMINI_MODEL = "UNKNOWN"
+            GEMINI_API_KEY = ""
             
+    print(f"🤖 AI 모델: {GEMINI_MODEL}")
+    print(f"🔑 API 키: {'*' * 10}{GEMINI_API_KEY[-4:] if GEMINI_API_KEY else '미설정'}")
+
+    # 2. 데이터베이스 초기화
+    try:
+        from database import create_tables, ensure_schema
+        print("📁 데이터베이스 테이블 및 스키마 검사 중...")
+        create_tables()
+        ensure_schema()
+        print("✅ 데이터베이스 초기화 완료")
     except Exception as e:
-        print(f"데이터베이스 초기화 오류: {e}")
+        print(f"❌ 데이터베이스 초기화 오류: {e}")
         import traceback
         traceback.print_exc()
+        
+    print("🚀 서버 준비 완료 - 요청을 받을 수 있습니다.")
+    print("="*60 + "\n")
 
 # CORS 헤더를 포함한 공통 헤더
 CORS_HEADERS = {
@@ -455,6 +404,16 @@ try:
         print("즐겨찾기 라우터 등록 완료: /api/favorites")
     except Exception as e:
         print(f"favorites 라우터 import/등록 오류: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # 무활동 감지 라우터 import 및 등록
+    try:
+        import routers.inactivity as inactivity
+        app.include_router(inactivity.router, prefix="/api/inactivity", tags=["무활동감지"])
+        print("무활동 감지 라우터 등록 완료: /api/inactivity")
+    except Exception as e:
+        print(f"inactivity 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
 

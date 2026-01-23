@@ -11,10 +11,43 @@ import Location from './pages/Location'
 import Monitoring from './pages/Monitoring'
 import Health from './pages/Health'
 import Settings from './pages/Settings'
+import NotificationSettings from './pages/NotificationSettings'
 import ModeSelector from './pages/ModeSelector'
+import NotificationBanner from './components/NotificationBanner'
 import ProtectedRoute from './components/ProtectedRoute'
+import { inactivityAPI, guardiansAPI } from './services/api'
+import { useState, useEffect } from 'react'
 
 function App() {
+  const [managedParentId, setManagedParentId] = useState<number | undefined>()
+
+  // 활동 추적 (심장박동) 및 부모 ID 가져오기
+  useEffect(() => {
+    const userStr = localStorage.getItem('user_info')
+    if (!userStr) return
+    const user = JSON.parse(userStr)
+
+    // 부모 모드일 때만 심장박동 전송
+    if (localStorage.getItem('userMode') === 'parent') {
+      const sendHeartbeat = () => {
+        inactivityAPI.updateActivity('heartbeat').catch(console.error)
+      }
+      sendHeartbeat()
+      const interval = setInterval(sendHeartbeat, 120000) // 2분마다
+      return () => clearInterval(interval)
+    }
+    // 자녀 모드일 때 관리 중인 부모 ID 가져오기
+    else if (localStorage.getItem('userMode') === 'child') {
+      guardiansAPI.getManagedUsers().then(res => {
+        const managedUsers = res.data.managed_users || []
+        if (managedUsers.length > 0) {
+          // 백엔드 수정 사항 반영: managedUsers[0].user_id 또는 .id 사용
+          setManagedParentId(managedUsers[0].user_id || managedUsers[0].id)
+        }
+      }).catch(console.error)
+    }
+  }, [])
+
   return (
     <AuthProvider>
       <Routes>
@@ -35,7 +68,12 @@ function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard" element={
+            <>
+              <NotificationBanner mode="parent" />
+              <Dashboard />
+            </>
+          } />
           <Route path="tasks" element={<Tasks />} />
           <Route path="chat" element={<Chat />} />
           <Route path="medicine" element={<Medicine />} />
@@ -51,13 +89,19 @@ function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard" element={
+            <>
+              <NotificationBanner mode="child" parentId={managedParentId} />
+              <Dashboard />
+            </>
+          } />
           <Route path="tasks" element={<Tasks />} />
           <Route path="chat" element={<Chat />} />
           <Route path="guardians" element={<Guardians />} />
           <Route path="medicine" element={<Medicine />} />
           <Route path="location" element={<Location />} />
           <Route path="monitoring" element={<Monitoring />} />
+          <Route path="notifications" element={<NotificationSettings />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

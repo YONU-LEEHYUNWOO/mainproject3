@@ -13,35 +13,33 @@ export interface FavoritePlace {
 export const useFavorites = () => {
     const [favorites, setFavorites] = useState<FavoritePlace[]>([])
     const [isLoading, setIsLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
 
     const fetchFavorites = async () => {
         setIsLoading(true)
         try {
             const response = await api.get('/api/favorites/')
-            setFavorites(response.data)
-        } catch (err) {
-            console.error('Failed to fetch favorites:', err)
-            setError('즐겨찾기 목록을 불러오지 못했습니다.')
+            setFavorites(response.data.data || [])
+        } catch (error) {
+            console.error('Failed to fetch favorites:', error)
         } finally {
             setIsLoading(false)
         }
     }
 
-    const addFavorite = async (name: string, address: string, lat: number, lng: number, category: string = 'other') => {
+    const addFavorite = async (place: any) => {
         try {
             const response = await api.post('/api/favorites/', {
-                name,
-                address,
-                latitude: lat,
-                longitude: lng,
-                category
+                name: place.place_name,
+                category: place.category_group_name || 'other',
+                address: place.road_address_name || place.address_name,
+                latitude: parseFloat(place.y),
+                longitude: parseFloat(place.x)
             })
-            setFavorites([...favorites, response.data])
-            return response.data
-        } catch (err) {
-            console.error('Failed to add favorite:', err)
-            throw err
+            setFavorites([...favorites, response.data.data])
+            return true
+        } catch (error) {
+            console.error('Failed to add favorite:', error)
+            return false
         }
     }
 
@@ -62,7 +60,6 @@ export const useFavorites = () => {
     return {
         favorites,
         isLoading,
-        error,
         addFavorite,
         removeFavorite,
         fetchFavorites

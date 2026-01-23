@@ -23,6 +23,7 @@ class User(BaseModel):
     is_superuser = Column(Boolean, default=False, nullable=False)
     last_login = Column(DateTime, nullable=True)
     location_sharing_enabled = Column(Boolean, default=False, nullable=False)
+    last_activity_at = Column(DateTime, default=datetime.utcnow, nullable=True)
 
 
     # 관계 설정 (lazy loading으로 성능 최적화)

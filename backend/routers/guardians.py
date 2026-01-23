@@ -80,7 +80,8 @@ async def get_managed_users(
             parent = db.query(User).filter(User.id == rel.user_id).first()
             if parent:
                 result.append({
-                    "id": rel.id,
+                    "id": parent.id, # 프론트엔드에서 response.data[0].id로 접근하므로 id를 parent.id로 설정
+                    "rel_id": rel.id,
                     "user_id": parent.id,
                     "username": parent.username,
                     "full_name": parent.full_name,

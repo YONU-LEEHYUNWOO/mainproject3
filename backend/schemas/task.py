@@ -38,8 +38,8 @@ class TaskUpdate(BaseModel):
     """일정 업데이트 스키마"""
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    date: Optional[date] = None
-    time: Optional[time] = None
+    date: Optional[str] = None  # date 객체 대신 문자열로 받음
+    time: Optional[str] = None  # time 객체 대신 문자열로 받음
     location: Optional[str] = Field(None, max_length=255)
     latitude: Optional[float] = None
     longitude: Optional[float] = None

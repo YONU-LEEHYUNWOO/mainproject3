@@ -49,7 +49,7 @@ const Settings = () => {
         }
       }
       const response = await favoritesAPI.getFavorites(targetId)
-      setFavorites(response.data || [])
+      setFavorites(response.data.data || [])
     } catch (error) {
       console.error('즐겨찾기 로드 오류:', error)
     }
@@ -375,14 +375,14 @@ const Settings = () => {
             {/* 등록된 장소 목록 */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-gray-500">등록된 장소</h3>
-              {favorites.filter((f: { category: string }) => f.category === activeCategory).length === 0 ? (
+              {(!Array.isArray(favorites) || favorites.filter((f: { category: string }) => f.category === activeCategory).length === 0) ? (
                 <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                   <MapPin className="mx-auto h-8 w-8 text-gray-400" />
                   <p className="mt-2 text-sm text-gray-500">등록된 장소가 없습니다.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {favorites
+                  {Array.isArray(favorites) && favorites
                     .filter((f: { category: string }) => f.category === activeCategory)
                     .sort((a: { is_primary: boolean }, b: { is_primary: boolean }) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
                     .map((place: any) => (

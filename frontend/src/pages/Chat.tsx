@@ -4,6 +4,9 @@ import { Send, Mic, AlertCircle } from 'lucide-react'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { VoiceInputButton } from '../components/VoiceInputButton'
 import { aiAPI, tasksAPI, guardiansAPI } from '../services/api'
+import { useLocation as useGeoLocation } from '../hooks/useLocation'
+import { LocationSearchModal } from '../components/LocationSearchModal'
+import { useGuardianLocation } from '../hooks/useGuardianLocation'
 
 interface Message {
   id: number
@@ -29,6 +32,19 @@ const Chat = () => {
   const [managedUserId, setManagedUserId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // 위치 정보 훅
+  const { currentLocation, refreshLocation } = useGeoLocation(mode)
+  const { parentLocation } = useGuardianLocation(mode)
+
+  // 검색 기준 위치 (자녀 모드면 부모님 위치 우선)
+  const baseLocation = mode === 'parent' ? currentLocation : parentLocation
+
+  // 검색 모달 관련 상태
+  const [showSearchModal, setShowSearchModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [taskPreview, setTaskPreview] = useState<any>(null)
+  const [frozenLocation, setFrozenLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+
   // 음성 인식 훅
   const {
     isListening,
@@ -49,6 +65,13 @@ const Chat = () => {
       resetTranscript()
     }
   }, [transcript, isListening, resetTranscript])
+
+  /**
+   * 컴포넌트 마운트 시 위치 정보 갱신
+   */
+  useEffect(() => {
+    refreshLocation()
+  }, [])
 
   /**
    * 음성 인식 중지 시 자동으로 전송하지 않음 (사용자가 확인 후 전송)
@@ -125,7 +148,9 @@ const Chat = () => {
         context: {
           mode,
           target_id: mode === 'child' ? managedUserId : null
-        }
+        },
+        latitude: currentLocation?.latitude,
+        longitude: currentLocation?.longitude
       })
 
       console.log('🤖 AI 전체 응답:', response.data)
@@ -146,7 +171,14 @@ const Chat = () => {
       if (action) {
         console.log('⚡ 실행할 액션:', action)
 
-        if (action.type === 'SEARCH' || action.type === 'SEARCH_STORE') {
+        if (action.type === 'SEARCH_LOCATION') {
+          // 일정 등록 전 장소 검색 팝업
+          setSearchQuery(action.query || '')
+          setTaskPreview(action.task_preview || {})
+          // 모달을 열 때 현재 위치를 고정
+          setFrozenLocation(baseLocation)
+          setShowSearchModal(true)
+        } else if (action.type === 'SEARCH' || action.type === 'SEARCH_STORE') {
           const query = action.query
           if (query) {
             // 1.5초 후 이동 (사용자가 응답을 읽을 시간 부여)
@@ -252,8 +284,57 @@ const Chat = () => {
     }
   }
 
+  /**
+   * 장소 선택 완료 핸들러
+   */
+  const handleLocationSelect = async (place: any) => {
+    setShowSearchModal(false)
+
+    if (!taskPreview) return
+
+    setIsLoading(true)
+    try {
+      const targetId = mode === 'child' ? (managedUserId || undefined) : undefined
+      const createResponse = await tasksAPI.createTask({
+        ...taskPreview,
+        location: place.place_name,
+        latitude: parseFloat(place.y),
+        longitude: parseFloat(place.x),
+        owner_id: targetId
+      })
+
+      console.log('✅ 장소 선택 후 일정 등록 성공:', createResponse.data)
+
+      const successMsg: Message = {
+        id: Date.now() + 5,
+        text: `✅ 일정이 등록되었습니다:\n📍 장소: ${place.place_name}\n📅 일시: ${taskPreview.date} ${taskPreview.time || ''}`,
+        isUser: false,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMsg])
+    } catch (err: any) {
+      console.error('❌ 장소 선택 후 일정 등록 실패:', err)
+      setError(`일정 등록 실패: ${err.message}`)
+    } finally {
+      setIsLoading(false)
+      setTaskPreview(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* 장소 선택 모달 */}
+      <LocationSearchModal
+        isOpen={showSearchModal}
+        onClose={() => {
+          setShowSearchModal(false)
+          setFrozenLocation(null) // 모달 닫을 때 고정 위치 해제
+        }}
+        initialQuery={searchQuery}
+        onSelect={handleLocationSelect}
+        currentLocation={frozenLocation} // 고정된 위치 사용
+      />
+
       {/* 모드별 제목 */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">

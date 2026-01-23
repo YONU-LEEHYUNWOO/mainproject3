@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Calendar, Clock, MapPin, Flag } from 'lucide-react'
 
 interface TaskFormProps {
@@ -6,13 +6,17 @@ interface TaskFormProps {
   onClose: () => void
   onSubmit: (taskData: any) => void
   selectedDate?: Date
+  initialData?: any // 추가: 수정을 위한 초기 데이터
+  currentLocation?: { latitude: number; longitude: number } | null
 }
 
 export const TaskForm: React.FC<TaskFormProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  selectedDate
+  selectedDate,
+  initialData,
+  currentLocation
 }) => {
   // 로컬 날짜 문자열 생성 함수
   const formatLocalDate = (date: Date): string => {
@@ -39,57 +43,82 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showResults, setShowResults] = useState(false)
+  const searchIdRef = useRef(0)
+
+  // 수정 모드일 경우 초기 데이터 로드
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setFormData({
+          title: initialData.title || '',
+          description: initialData.description || '',
+          date: initialData.date ? initialData.date.split('T')[0] : (selectedDate ? formatLocalDate(selectedDate) : ''),
+          time: initialData.time || '',
+          location: initialData.location || '',
+          latitude: initialData.latitude || null,
+          longitude: initialData.longitude || null,
+          priority: initialData.priority || 2,
+          category: initialData.category || '일반'
+        })
+        setLocationQuery(initialData.location || '')
+      } else {
+        setFormData({
+          title: '',
+          description: '',
+          date: selectedDate ? formatLocalDate(selectedDate) : '',
+          time: '',
+          location: '',
+          latitude: null,
+          longitude: null,
+          priority: 2,
+          category: '일반'
+        })
+        setLocationQuery('')
+      }
+    }
+  }, [isOpen, initialData, selectedDate])
 
   // 장소 검색 함수
-  const searchPlaces = (query: string) => {
+  const searchPlaces = useCallback((query: string) => {
     if (!query.trim() || !window.kakao || !window.kakao.maps) {
       setSearchResults([])
       return
     }
 
+    const currentSearchId = ++searchIdRef.current
     setIsSearching(true)
     const ps = new window.kakao.maps.services.Places()
 
     const searchOptions: any = {
-      size: 10
+      size: 15
     }
 
-    // 현재 위치 기반 검색 (가능한 경우)
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          searchOptions.location = new window.kakao.maps.LatLng(
-            position.coords.latitude,
-            position.coords.longitude
-          )
-          searchOptions.radius = 5000 // 5km
-
-          ps.keywordSearch(query, (data: any[], status: any) => {
-            if (status === window.kakao.maps.services.Status.OK) {
-              setSearchResults(data)
-              setShowResults(true)
-            } else {
-              setSearchResults([])
-            }
-            setIsSearching(false)
-          }, searchOptions)
-        },
-        () => {
-          // 위치 정보 없으면 전국 검색
-          ps.keywordSearch(query, (data: any[], status: any) => {
-            if (status === window.kakao.maps.services.Status.OK) {
-              setSearchResults(data)
-              setShowResults(true)
-            } else {
-              setSearchResults([])
-            }
-            setIsSearching(false)
-          }, searchOptions)
-        }
+    // 부모/자녀 모드에 따라 주입된 currentLocation 사용
+    if (currentLocation) {
+      searchOptions.location = new window.kakao.maps.LatLng(
+        currentLocation.latitude,
+        currentLocation.longitude
       )
-    } else {
-      // Geolocation 미지원 시 전국 검색
+      searchOptions.sort = window.kakao.maps.services.SortBy.ACCURACY
+      console.log(`🔍 [${currentSearchId}] TaskForm 주입된 위치 기반 검색:`, currentLocation.latitude, currentLocation.longitude)
+
       ps.keywordSearch(query, (data: any[], status: any) => {
+        if (currentSearchId !== searchIdRef.current) return
+
+        if (status === window.kakao.maps.services.Status.OK) {
+          setSearchResults(data)
+          setShowResults(true)
+        } else {
+          setSearchResults([])
+        }
+        setIsSearching(false)
+      }, searchOptions)
+    } else {
+      // 위치 정보 없으면 전국 검색
+      console.log(`🔍 [${currentSearchId}] TaskForm 전국 검색 (위치 정보 없음)`)
+      ps.keywordSearch(query, (data: any[], status: any) => {
+        if (currentSearchId !== searchIdRef.current) return
+
         if (status === window.kakao.maps.services.Status.OK) {
           setSearchResults(data)
           setShowResults(true)
@@ -99,7 +128,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         setIsSearching(false)
       }, searchOptions)
     }
-  }
+  }, [currentLocation])
 
   // 장소 선택 핸들러
   const handlePlaceSelect = (place: any) => {
@@ -165,7 +194,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">새 일정 추가</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {initialData ? '일정 수정' : '새 일정 추가'}
+          </h2>
           <button
             onClick={handleClose}
             className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
@@ -327,7 +358,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
               type="submit"
               className="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
             >
-              추가
+              {initialData ? '수정 완료' : '추가'}
             </button>
           </div>
         </form>

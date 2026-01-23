@@ -24,16 +24,16 @@ export const useSpeechRecognition = () => {
    * 음성 인식 지원 여부 확인
    */
   useEffect(() => {
-    const SpeechRecognition = 
-      (window as any).SpeechRecognition || 
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition
 
     if (SpeechRecognition) {
       setState(prev => ({ ...prev, isSupported: true }))
       recognitionRef.current = new SpeechRecognition()
-      
+
       const recognition = recognitionRef.current
-      recognition.continuous = false // 한 번만 인식
+      recognition.continuous = true // 연속 인식 활성화
       recognition.interimResults = true // 중간 결과도 받기
       recognition.lang = 'ko-KR' // 한국어 설정
 
@@ -60,7 +60,7 @@ export const useSpeechRecognition = () => {
       // 에러 이벤트
       recognition.onerror = (event: any) => {
         let errorMessage = '음성 인식 중 오류가 발생했습니다.'
-        
+
         switch (event.error) {
           case 'no-speech':
             errorMessage = '음성이 감지되지 않았습니다.'
