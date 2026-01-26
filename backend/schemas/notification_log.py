@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 class NotificationLogBase(BaseModel):
     """알림 로그 기본 스키마"""
-    task_id: int
+    task_id: Optional[int] = None
     notification_type: str
     title: str
     message: Optional[str] = None
@@ -34,6 +34,7 @@ class NotificationLogResponse(NotificationLogBase):
     user_id: int
     sent_at: Optional[datetime] = None
     is_success: bool
+    is_read: bool = False
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime

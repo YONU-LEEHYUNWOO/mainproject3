@@ -22,6 +22,7 @@ from schemas.task import (
 )
 from utils.response import success_response
 from utils.serializer import orm_to_dict, serialize_datetime_objects
+from utils.activity import record_user_activity
 
 # AI 분석 및 경로 서비스
 from services.ai_service import AIService
@@ -350,6 +351,7 @@ async def create_task(
             log_info(f"[CREATE_TASK] DB에 추가 완료, 커밋 시도...")
             db.commit()
             log_info(f"[CREATE_TASK] 커밋 완료, refresh 시도...")
+            record_user_activity(db, current_user, "task_create")
             db.refresh(db_task)
             log_info(f"[CREATE_TASK] refresh 완료, task_id={db_task.id}")
         except Exception as e:
@@ -526,10 +528,8 @@ async def toggle_task_completion(
         )
 
     task.completed = not task.completed
-    # completed_at 필드는 Task 모델에 없으므로 제거
-    # 필요시 나중에 마이그레이션으로 추가 가능
-    
     db.commit()
+    record_user_activity(db, current_user, f"task_toggle_{task_id}")
     db.refresh(task)
     
     return success_response(

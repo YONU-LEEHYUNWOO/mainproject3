@@ -60,6 +60,8 @@ async def get_guardians(
         print(f"ERROR in get_guardians: {e}")
         return {"guardians": [], "total": 0}
 
+from utils.response import success_response
+
 @router.get("/managed-users")
 async def get_managed_users(
     current_user: User = Depends(get_current_user),
@@ -90,14 +92,13 @@ async def get_managed_users(
                     "created_at": str(rel.created_at)
                 })
         
-        return {
+        return success_response(data={
             "managed_users": result,
             "total": len(result)
-        }
+        })
     except Exception as e:
         print(f"ERROR in get_managed_users: {e}")
-        return {"managed_users": [], "total": 0}
-        raise HTTPException(status_code=500, detail=str(e))
+        return success_response(data={"managed_users": [], "total": 0})
 
 @router.post("/", response_model=GuardianResponse, status_code=status.HTTP_201_CREATED)
 async def create_guardian(

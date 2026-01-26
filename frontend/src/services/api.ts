@@ -273,6 +273,10 @@ export const notificationLogsAPI = {
 
   updateLog: (id: number, logData: any) =>
     api.put(`/api/notification-logs/${id}`, logData),
+  markRead: (id: number) =>
+    api.patch(`/api/notification-logs/${id}/read`),
+  markAllRead: () =>
+    api.post('/api/notification-logs/read-all'),
 }
 
 // 즐겨찾는 장소 API
@@ -335,6 +339,10 @@ export const inactivityAPI = {
   // 현재 상태 조회
   getStatus: (targetUserId: number) =>
     api.get(`/api/inactivity/status/${targetUserId}`),
+
+  // 알림 횟수 증가
+  incrementReminder: (targetUserId: number) =>
+    api.patch(`/api/inactivity/reminder/increment/${targetUserId}`),
 }
 
 export default api

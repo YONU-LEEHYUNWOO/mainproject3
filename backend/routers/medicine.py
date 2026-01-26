@@ -14,8 +14,9 @@ from models.medicine_alarm import MedicineAlarm
 from models.guardian import Guardian
 from schemas.medicine_alarm import (
     MedicineAlarmCreate, MedicineAlarmUpdate, MedicineAlarmResponse,
-    MedicineAlarmListResponse, MedicineTakenRequest, MedicineTakenResponse
+    MedicineAlarmListResponse, MedicineTakenRequest
 )
+from utils.activity import record_user_activity
 from utils.response import success_response
 
 router = APIRouter()
@@ -206,6 +207,10 @@ async def mark_medicine_taken(
 
     # 복용 완료 처리
     alarm.mark_taken()
+    # The 'log' variable is not defined in the original code. Assuming it's a placeholder or part of an unprovided context.
+    # For now, I will add the record_user_activity call as instructed, without the 'log' line.
+    # if log: log.taken = True; log.taken_at = datetime.utcnow()
+    record_user_activity(db, current_user, f"medicine_taken_{alarm.id}")
     db.commit()
 
     return success_response(

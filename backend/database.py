@@ -88,6 +88,39 @@ def ensure_schema():
                     print("[DB-CHECK] favorite_places 테이블에 is_primary 컬럼 추가 중...")
                     conn.execute(text("ALTER TABLE favorite_places ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT 0"))
         
+        # 3. parent_requests 테이블 확인 및 생성
+        if 'parent_requests' not in tables:
+            print("[DB-CHECK] parent_requests 테이블이 없습니다. 생성 중...")
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS parent_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        content VARCHAR(500) NOT NULL,
+                        is_completed BOOLEAN NOT NULL DEFAULT 0,
+                        user_id INTEGER NOT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """))
+            print("[DB-CHECK] parent_requests 테이블 생성 완료")
+        
+        # 4. frequent_items 테이블 확인 및 생성
+        if 'frequent_items' not in tables:
+            print("[DB-CHECK] frequent_items 테이블 생성 중...")
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS frequent_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(100) NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """))
+            print("[DB-CHECK] frequent_items 테이블 생성 완료")
+        
         print("[DB-CHECK] 모든 스키마 검사 완료")
     except Exception as e:
         print(f"[DB-CHECK] 오류 발생: {e}")

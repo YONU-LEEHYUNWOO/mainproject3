@@ -171,7 +171,7 @@ async def simple_login(request: Request):
 try:
     from models import (
         Base, User, Task, ChatMessage, AIConversation, 
-        Guardian, Medicine, MedicineAlarm, NotificationLog
+        Guardian, Medicine, MedicineAlarm, NotificationLog, ParentRequest
     )
     from models.inactivity import InactivitySettings, InactivityLog
     from database import engine, create_tables
@@ -416,6 +416,14 @@ try:
         print(f"inactivity 라우터 import/등록 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
+
+    # 이거부탁해 라우터 등록
+    try:
+        import routers.parent_requests as parent_requests
+        app.include_router(parent_requests.router, prefix="/api/parent-requests", tags=["이거부탁해"])
+        print("이거부탁해 라우터 등록 완료: /api/parent-requests")
+    except Exception as e:
+        print(f"parent_requests 라우터 등록 오류: {e}")
 
     print("\n라우터 등록 프로세스 완료!")
 

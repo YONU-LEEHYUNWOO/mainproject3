@@ -19,6 +19,7 @@ from schemas.ai_conversation import (
 )
 from schemas.chat_message import ChatRequest, ChatResponse
 from utils.response import success_response
+from utils.activity import record_user_activity
 
 router = APIRouter()
 
@@ -200,6 +201,7 @@ async def analyze_text(
         )
 
         db.add(ai_conversation)
+        record_user_activity(db, current_user, "ai_chat")
         db.commit()
 
         analysis_data = {

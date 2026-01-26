@@ -21,7 +21,7 @@ class NotificationLog(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # 외래키
-    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     # 알림 정보
@@ -32,6 +32,7 @@ class NotificationLog(Base):
     # 알림 상태
     sent_at = Column(DateTime(timezone=True), nullable=True)
     is_success = Column(Boolean, default=False)
+    is_read = Column(Boolean, default=False) # 읽음 여부 추가
     error_message = Column(Text, nullable=True)
 
     # 관계

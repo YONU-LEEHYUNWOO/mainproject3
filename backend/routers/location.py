@@ -11,6 +11,7 @@ from models.location import Location
 from models.guardian import Guardian
 from schemas.location import LocationCreate, LocationResponse, LocationListResponse
 from utils.response import success_response
+from utils.activity import record_user_activity
 
 router = APIRouter()
 
@@ -173,6 +174,7 @@ async def get_route_info(
         if not route_data:
             raise HTTPException(status_code=404, detail="경로를 찾을 수 없습니다")
             
+        record_user_activity(db, current_user, "route_search")
         return success_response(data=route_data)
         
     except Exception as e:
