@@ -50,7 +50,6 @@ const Layout = ({ mode }: { mode: 'parent' | 'child' }) => {
     { name: '약 관리', href: '/child/medicine', icon: Pill },
     { name: '위치', href: '/child/location', icon: MapPin },
     { name: '모니터링', href: '/child/monitoring', icon: Activity },
-    { name: '알림 설정', href: '/child/notifications', icon: Bell },
     { name: '이거부탁해!', href: '/child/request', icon: ShoppingBag },
     { name: '고객 지원', href: '/child/support', icon: HelpCircle },
     { name: '설정', href: '/child/settings', icon: Settings },

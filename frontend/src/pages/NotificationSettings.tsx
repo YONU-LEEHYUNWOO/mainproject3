@@ -4,6 +4,7 @@ import { inactivityAPI, guardiansAPI } from '../services/api'
 
 const NotificationSettings = () => {
     const [parentId, setParentId] = useState<number | null>(null)
+    // 초기값을 명확하게 설정하여 controlled input 경고 방지
     const [settings, setSettings] = useState({
         is_enabled: true,
         threshold_hours: 4,
@@ -17,28 +18,60 @@ const NotificationSettings = () => {
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
 
+    /**
+     * 관리 중인 부모님 정보 및 알림 설정 로드
+     */
     useEffect(() => {
         const fetchData = async () => {
             try {
                 // 관리 중인 부모님 정보 가져오기
                 const response = await guardiansAPI.getManagedUsers()
-                const managedUsers = response.data.managed_users || []
+                
+                // 다양한 응답 형식 처리
+                let managedUsers = []
+                if (response.data.data?.managed_users) {
+                    managedUsers = response.data.data.managed_users
+                } else if (response.data.managed_users) {
+                    managedUsers = response.data.managed_users
+                } else if (Array.isArray(response.data.data)) {
+                    managedUsers = response.data.data
+                } else if (Array.isArray(response.data)) {
+                    managedUsers = response.data
+                }
 
-                if (managedUsers.length > 0) {
-                    const pid = managedUsers[0].user_id || managedUsers[0].id // 백엔드 구조에 맞춰 안전하게 접근
+                if (Array.isArray(managedUsers) && managedUsers.length > 0) {
+                    const pid = managedUsers[0].user_id || managedUsers[0].id
                     setParentId(pid)
 
                     // 설정 가져오기
-                    const settingsRes = await inactivityAPI.getSettings(pid)
-                    if (settingsRes.data) {
-                        setSettings(settingsRes.data)
+                    try {
+                        const settingsRes = await inactivityAPI.getSettings(pid)
+                        if (settingsRes.data) {
+                            // 응답 데이터를 기본값과 병합하여 undefined 방지
+                            setSettings({
+                                is_enabled: settingsRes.data.is_enabled ?? true,
+                                threshold_hours: settingsRes.data.threshold_hours ?? 4,
+                                sleep_start: settingsRes.data.sleep_start ?? '22:00',
+                                sleep_end: settingsRes.data.sleep_end ?? '07:00',
+                                max_reminders: settingsRes.data.max_reminders ?? 3,
+                                guardian_alert_enabled: settingsRes.data.guardian_alert_enabled ?? true
+                            })
+                        }
+                    } catch (settingsErr) {
+                        console.warn('설정 정보 없음, 기본값 사용')
+                        // 설정이 없어도 에러로 처리하지 않음
                     }
                 } else {
                     setError('관리중인 부모님 정보가 없습니다.')
                 }
             } catch (err: any) {
                 console.error('설정 로드 오류:', err)
-                setError('설정을 불러오는 중 오류가 발생했습니다.')
+                // 403 또는 404는 연결 안된 상태로 처리
+                if (err.response?.status === 403 || err.response?.status === 404) {
+                    setError('관리중인 부모님 정보가 없습니다.')
+                } else {
+                    setError('설정을 불러오는 중 오류가 발생했습니다.')
+                }
             } finally {
                 setLoading(false)
             }
@@ -105,10 +138,10 @@ const NotificationSettings = () => {
                                 <div className="flex items-center space-x-3">
                                     <input
                                         type="number"
-                                        value={settings.threshold_hours || ''}
+                                        value={settings.threshold_hours ?? 4}
                                         onChange={(e) => {
                                             const val = parseInt(e.target.value);
-                                            setSettings({ ...settings, threshold_hours: isNaN(val) ? 0 : val });
+                                            setSettings({ ...settings, threshold_hours: isNaN(val) ? 4 : val });
                                         }}
                                         className="w-20 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                                         min="1" max="24"
@@ -161,10 +194,10 @@ const NotificationSettings = () => {
                                     </div>
                                     <input
                                         type="number"
-                                        value={settings.max_reminders || ''}
+                                        value={settings.max_reminders ?? 3}
                                         onChange={(e) => {
                                             const val = parseInt(e.target.value);
-                                            setSettings({ ...settings, max_reminders: isNaN(val) ? 0 : val });
+                                            setSettings({ ...settings, max_reminders: isNaN(val) ? 3 : val });
                                         }}
                                         className="w-20 p-2 border border-gray-300 rounded-md"
                                         min="1" max="10"

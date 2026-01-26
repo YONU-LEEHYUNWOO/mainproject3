@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Bell, BellOff, Clock, Heart, Pill, Utensils, ShoppingCart,
   Home, MapPin, Star, Trash2, Search, Plus,
-  Type, MousePointer, Eye
+  Type, MousePointer, Eye, ArrowRight, AlertTriangle
 } from 'lucide-react'
 import { useNotifications } from '../hooks/useNotifications'
 import { useAccessibility } from '../contexts/AccessibilityContext'
@@ -16,6 +16,7 @@ import api, { favoritesAPI } from '../services/api'
  */
 const Settings = () => {
   const location = useLocation()
+  const navigate = useNavigate()
   const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
 
   const { permission, settings: notiSettings, requestPermission, saveSettings: saveNotiSettings } = useNotifications()
@@ -287,6 +288,28 @@ const Settings = () => {
       <div className="bg-white shadow rounded-lg">
         <div className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">알림 설정</h2>
+
+          {/* 자식 모드: 무활동 감지 설정 바로가기 */}
+          {mode === 'child' && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <AlertTriangle className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">무활동 감지 설정</h3>
+                    <p className="text-sm text-gray-500">부모님의 무활동 패턴 감지 및 긴급 알림 설정</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate('/child/notifications')}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <span className="text-sm font-medium">설정하기</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-6">
             {/* 알림 켜기/끄기 */}

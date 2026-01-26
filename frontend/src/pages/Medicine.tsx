@@ -206,7 +206,12 @@ const Medicine = () => {
         // 생성
         await medicineAPI.createAlarm(formData)
       }
-      await loadAlarms()
+      // 모드에 따라 적절한 목록 로드 함수 호출
+      if (mode === 'parent') {
+        await loadTodayAlarms()
+      } else {
+        await loadAlarms()
+      }
       setIsFormOpen(false)
       setEditingAlarm(null)
     } catch (error: any) {
@@ -262,8 +267,10 @@ const Medicine = () => {
     setEditingAlarm(null)
   }
 
-  // 통계 계산 (부모/자식 모드 공통)
-  // alarms가 배열인지 확인 후 복용 횟수 기준으로 통계 계산
+  /**
+   * 통계 계산 (부모/자식 모드 공통)
+   * 실제 복용한 시간 개수를 기준으로 계산
+   */
   const getStats = () => {
     if (!Array.isArray(alarms)) return { total: 0, completed: 0, remaining: 0 }
 
@@ -275,10 +282,14 @@ const Medicine = () => {
       const times = [alarm.time_1, alarm.time_2, alarm.time_3, alarm.time_4].filter(Boolean)
       totalDoses += times.length
 
-      // 복용 완료된 시간 개수 계산
-      // is_taken이 true면 해당 약의 모든 시간대가 완료된 것으로 간주
-      if (alarm.is_taken) {
-        completedDoses += times.length
+      // daily_taken_times를 파싱하여 실제 복용한 시간 개수 계산
+      if (alarm.daily_taken_times && alarm.daily_taken_times.trim()) {
+        const takenTimes = alarm.daily_taken_times.split(',').filter(t => t.trim())
+        // 실제 설정된 시간 중에서 복용한 것만 카운트
+        const validTakenCount = takenTimes.filter(takenTime => 
+          times.some(time => time === takenTime.trim())
+        ).length
+        completedDoses += validTakenCount
       }
     })
 

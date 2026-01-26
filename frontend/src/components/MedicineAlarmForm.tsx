@@ -17,6 +17,7 @@ interface MedicineAlarmFormData {
   current_stock: number
   reorder_threshold: number
   prescription_info?: string
+  is_active?: boolean  // 활성화 상태 추가
 }
 
 interface MedicineAlarmFormProps {
@@ -50,7 +51,8 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
     evening: false,
     current_stock: 0,
     reorder_threshold: 5,
-    prescription_info: ''
+    prescription_info: '',
+    is_active: true  // 약 등록 시 자동으로 활성화
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +77,8 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
         evening: false,
         current_stock: 0,
         reorder_threshold: 5,
-        prescription_info: ''
+        prescription_info: '',
+        is_active: true  // 약 등록 시 자동으로 활성화
       })
     }
     setError(null)
@@ -104,7 +107,15 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
 
     setIsSubmitting(true)
     try {
-      await onSubmit(formData)
+      // 빈 시간 칸은 undefined로 전송 (빈 문자열 제거)
+      const submitData = {
+        ...formData,
+        time_2: formData.time_2 || undefined,
+        time_3: formData.time_3 || undefined,
+        time_4: formData.time_4 || undefined,
+        end_date: formData.end_date || undefined
+      }
+      await onSubmit(submitData)
       onClose()
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || '약 알림 저장에 실패했습니다.'
@@ -180,11 +191,20 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setFormData({
-                        ...formData,
-                        time_1: btn.time,
-                        [btn.field]: true
-                      })}
+                      onClick={() => {
+                        // 비어있는 첫 번째 시간 칸 찾기
+                        const newFormData = { ...formData, [btn.field]: true }
+                        if (!formData.time_1) {
+                          newFormData.time_1 = btn.time
+                        } else if (!formData.time_2) {
+                          newFormData.time_2 = btn.time
+                        } else if (!formData.time_3) {
+                          newFormData.time_3 = btn.time
+                        } else if (!formData.time_4) {
+                          newFormData.time_4 = btn.time
+                        }
+                        setFormData(newFormData)
+                      }}
                       className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
                     >
                       {btn.label}
