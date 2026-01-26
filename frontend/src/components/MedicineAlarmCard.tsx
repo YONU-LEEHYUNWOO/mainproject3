@@ -13,6 +13,8 @@ interface MedicineAlarmCardProps {
     start_date: string
     end_date?: string
     is_active?: boolean
+    current_stock?: number
+    reorder_threshold?: number
   }
   onEdit: (alarm: any) => void
   onDelete: (alarmId: number) => void
@@ -55,9 +57,8 @@ export const MedicineAlarmCard: React.FC<MedicineAlarmCardProps> = ({
   const times = getTimes()
 
   return (
-    <div className={`p-4 border rounded-lg transition-colors ${
-      alarm.is_active === false ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-white border-gray-300'
-    }`}>
+    <div className={`p-4 border rounded-lg transition-colors ${alarm.is_active === false ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-white border-gray-300'
+      }`}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
           {/* 약 이름 */}
@@ -68,10 +69,18 @@ export const MedicineAlarmCard: React.FC<MedicineAlarmCardProps> = ({
             )}
           </div>
 
-          {/* 복용량 */}
-          <p className="text-sm text-gray-600 mb-2">
-            복용량: {alarm.dosage}
-          </p>
+          {/* 복용량 및 재고 */}
+          <div className="flex items-center space-x-4 mb-2">
+            <p className="text-sm text-gray-600">
+              복용량: {alarm.dosage}
+            </p>
+            {alarm.current_stock !== undefined && (
+              <p className={`text-sm font-medium ${alarm.current_stock <= (alarm.reorder_threshold || 5) ? 'text-red-500' : 'text-blue-500'
+                }`}>
+                재고: {alarm.current_stock}개
+              </p>
+            )}
+          </div>
 
           {/* 복용 시간 목록 */}
           <div className="space-y-1 mb-2">
@@ -93,11 +102,10 @@ export const MedicineAlarmCard: React.FC<MedicineAlarmCardProps> = ({
         <div className="flex items-center space-x-2 ml-4">
           <button
             onClick={() => onToggle(alarm.id)}
-            className={`p-2 rounded-lg transition-colors ${
-              alarm.is_active === false
-                ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                : 'bg-green-100 text-green-600 hover:bg-green-200'
-            }`}
+            className={`p-2 rounded-lg transition-colors ${alarm.is_active === false
+              ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-green-100 text-green-600 hover:bg-green-200'
+              }`}
             title={alarm.is_active === false ? '활성화' : '비활성화'}
           >
             {alarm.is_active === false ? (

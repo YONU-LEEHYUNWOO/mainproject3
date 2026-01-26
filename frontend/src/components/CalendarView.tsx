@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface CalendarViewProps {
   selectedDate: Date
   onDateSelect: (date: Date) => void
-  taskCounts: { [key: string]: { total: number; completed: number } }
+  taskCounts: { [key: string]: { total: number; completed: number; medicineCount: number } }
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -56,8 +56,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const isToday = (day: number) => {
     const today = new Date()
     return today.getDate() === day &&
-           today.getMonth() === currentMonth.getMonth() &&
-           today.getFullYear() === currentMonth.getFullYear()
+      today.getMonth() === currentMonth.getMonth() &&
+      today.getFullYear() === currentMonth.getFullYear()
   }
 
   /**
@@ -65,8 +65,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
    */
   const isSelected = (day: number) => {
     return selectedDate.getDate() === day &&
-           selectedDate.getMonth() === currentMonth.getMonth() &&
-           selectedDate.getFullYear() === currentMonth.getFullYear()
+      selectedDate.getMonth() === currentMonth.getMonth() &&
+      selectedDate.getFullYear() === currentMonth.getFullYear()
   }
 
   /**
@@ -126,7 +126,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         {/* 날짜 셀들 */}
         {dayCells.map(day => {
           const dateKey = formatDateKey(year, month, day)
-          const counts = taskCounts[dateKey] || { total: 0, completed: 0 }
+          const counts = taskCounts[dateKey] || { total: 0, completed: 0, medicineCount: 0 }
           const hasTasks = counts.total > 0
 
           return (
@@ -138,10 +138,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 ${isTodayAndSelected(day)
                   ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
                   : isToday(day)
-                  ? 'bg-blue-50 border-2 border-blue-500'
-                  : isSelected(day)
-                  ? 'bg-blue-100 border border-blue-300'
-                  : 'border border-transparent'
+                    ? 'bg-blue-50 border-2 border-blue-500'
+                    : isSelected(day)
+                      ? 'bg-blue-100 border border-blue-300'
+                      : 'border border-transparent'
                 }
               `}
             >
@@ -151,10 +151,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 ${isTodayAndSelected(day)
                   ? 'text-blue-700 font-bold'
                   : isToday(day)
-                  ? 'text-blue-600 font-semibold'
-                  : isSelected(day)
-                  ? 'text-blue-700'
-                  : 'text-gray-700'
+                    ? 'text-blue-600 font-semibold'
+                    : isSelected(day)
+                      ? 'text-blue-700'
+                      : 'text-gray-700'
                 }
               `}>
                 {day}

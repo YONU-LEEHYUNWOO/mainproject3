@@ -22,6 +22,13 @@ class MedicineAlarmBase(BaseModel):
     time_2: Optional[time] = None
     time_3: Optional[time] = None
     time_4: Optional[time] = None
+    morning: bool = False
+    lunch: bool = False
+    evening: bool = False
+    current_stock: int = 0
+    reorder_threshold: int = 5
+    prescription_info: Optional[str] = None
+    favorite_pharmacy_id: Optional[int] = None
 
 class MedicineAlarmCreate(MedicineAlarmBase):
     """약 알림 생성 스키마"""
@@ -42,6 +49,13 @@ class MedicineAlarmUpdate(BaseModel):
     time_2: Optional[time] = None
     time_3: Optional[time] = None
     time_4: Optional[time] = None
+    morning: Optional[bool] = None
+    lunch: Optional[bool] = None
+    evening: Optional[bool] = None
+    current_stock: Optional[int] = None
+    reorder_threshold: Optional[int] = None
+    prescription_info: Optional[str] = None
+    favorite_pharmacy_id: Optional[int] = None
 
 class MedicineAlarmResponse(MedicineAlarmBase):
     """약 알림 응답 스키마"""
@@ -49,6 +63,7 @@ class MedicineAlarmResponse(MedicineAlarmBase):
     user_id: int
     last_taken: Optional[datetime] = None
     next_reminder: Optional[datetime] = None
+    daily_taken_times: Optional[str] = None  # 콤마로 구분된 문자열 반환
     created_at: datetime
     updated_at: datetime
 
@@ -63,6 +78,7 @@ class MedicineAlarmListResponse(BaseModel):
 class MedicineTakenRequest(BaseModel):
     """약 복용 완료 요청 스키마"""
     alarm_id: int
+    time: Optional[str] = None  # "08:00" 형식
 
 class MedicineTakenResponse(BaseModel):
     """약 복용 완료 응답 스키마"""

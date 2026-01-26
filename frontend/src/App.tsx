@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { AccessibilityProvider } from './contexts/AccessibilityContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -15,7 +16,7 @@ import NotificationSettings from './pages/NotificationSettings'
 import ModeSelector from './pages/ModeSelector'
 import ParentRequest from './pages/ParentRequest'
 import ChildRequestList from './pages/ChildRequestList'
-import NotificationBanner from './components/NotificationBanner'
+import Support from './pages/Support'
 import ProtectedRoute from './components/ProtectedRoute'
 import { inactivityAPI, guardiansAPI } from './services/api'
 import { useState, useEffect } from 'react'
@@ -50,58 +51,62 @@ function App() {
   }, [])
 
   return (
-    <AuthProvider>
-      <Routes>
-        {/* 로그인 페이지 */}
-        <Route path="/login" element={<Login />} />
+    <AccessibilityProvider>
+      <AuthProvider>
+        <Routes>
+          {/* 로그인 페이지 */}
+          <Route path="/login" element={<Login />} />
 
-        {/* 모드 선택 페이지 */}
-        <Route path="/mode-select" element={
-          <ProtectedRoute>
-            <ModeSelector />
-          </ProtectedRoute>
-        } />
+          {/* 모드 선택 페이지 */}
+          <Route path="/mode-select" element={
+            <ProtectedRoute>
+              <ModeSelector />
+            </ProtectedRoute>
+          } />
 
-        {/* 부모 모드 라우트들 */}
-        <Route path="/parent/*" element={
-          <ProtectedRoute>
-            <Layout mode="parent" />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="tasks" element={<Tasks />} />
-          <Route path="chat" element={<Chat />} />
-          <Route path="medicine" element={<Medicine />} />
-          <Route path="location" element={<Location />} />
-          <Route path="health" element={<Health />} />
-          <Route path="request" element={<ParentRequest />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+          {/* 부모 모드 라우트들 */}
+          <Route path="/parent/*" element={
+            <ProtectedRoute>
+              <Layout mode="parent" />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Dashboard />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="chat" element={<Chat />} />
+            <Route path="medicine" element={<Medicine />} />
+            <Route path="location" element={<Location />} />
+            <Route path="health" element={<Health />} />
+            <Route path="request" element={<ParentRequest />} />
+            <Route path="support" element={<Support />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
 
-        {/* 자식 모드 라우트들 */}
-        <Route path="/child/*" element={
-          <ProtectedRoute>
-            <Layout mode="child" />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="tasks" element={<Tasks />} />
-          <Route path="chat" element={<Chat />} />
-          <Route path="guardians" element={<Guardians />} />
-          <Route path="medicine" element={<Medicine />} />
-          <Route path="location" element={<Location />} />
-          <Route path="monitoring" element={<Monitoring />} />
-          <Route path="notifications" element={<NotificationSettings />} />
-          <Route path="request" element={<ChildRequestList />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+          {/* 자식 모드 라우트들 */}
+          <Route path="/child/*" element={
+            <ProtectedRoute>
+              <Layout mode="child" />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Dashboard />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="chat" element={<Chat />} />
+            <Route path="guardians" element={<Guardians />} />
+            <Route path="medicine" element={<Medicine />} />
+            <Route path="location" element={<Location />} />
+            <Route path="monitoring" element={<Monitoring />} />
+            <Route path="notifications" element={<NotificationSettings />} />
+            <Route path="request" element={<ChildRequestList />} />
+            <Route path="support" element={<Support />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
 
-        {/* 기본 경로 - 로그인으로 리다이렉트 */}
-        <Route path="/" element={<Login />} />
-      </Routes>
-    </AuthProvider>
+          {/* 기본 경로 - 로그인으로 리다이렉트 */}
+          <Route path="/" element={<Login />} />
+        </Routes>
+      </AuthProvider>
+    </AccessibilityProvider>
   )
 }
 

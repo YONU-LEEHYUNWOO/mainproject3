@@ -11,6 +11,12 @@ interface MedicineAlarmFormData {
   start_date: string
   end_date?: string
   reminder_minutes: number
+  morning: boolean
+  lunch: boolean
+  evening: boolean
+  current_stock: number
+  reorder_threshold: number
+  prescription_info?: string
 }
 
 interface MedicineAlarmFormProps {
@@ -38,7 +44,13 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
     time_4: '',
     start_date: new Date().toISOString().split('T')[0],
     end_date: '',
-    reminder_minutes: 15
+    reminder_minutes: 15,
+    morning: false,
+    lunch: false,
+    evening: false,
+    current_stock: 0,
+    reorder_threshold: 5,
+    prescription_info: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +69,13 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
         time_4: '',
         start_date: new Date().toISOString().split('T')[0],
         end_date: '',
-        reminder_minutes: 15
+        reminder_minutes: 15,
+        morning: false,
+        lunch: false,
+        evening: false,
+        current_stock: 0,
+        reorder_threshold: 5,
+        prescription_info: ''
       })
     }
     setError(null)
@@ -149,9 +167,31 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
 
             {/* 복용 시간 (최대 4개) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                복용 시간 <span className="text-red-500">*</span>
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  복용 시간 <span className="text-red-500">*</span>
+                </label>
+                <div className="flex space-x-2">
+                  {[
+                    { label: '아침식후', time: '08:00', field: 'morning' },
+                    { label: '점심식후', time: '12:30', field: 'lunch' },
+                    { label: '저녁식후', time: '18:30', field: 'evening' }
+                  ].map((btn, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setFormData({
+                        ...formData,
+                        time_1: btn.time,
+                        [btn.field]: true
+                      })}
+                      className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <input
                   type="time"
@@ -209,6 +249,56 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
+            </div>
+
+            {/* 복용 시간 선택 (아침/점심/저녁) */}
+            <div className="flex space-x-4 py-2">
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={formData.morning} onChange={(e) => setFormData({ ...formData, morning: e.target.checked })} className="rounded text-blue-500" />
+                <span className="text-sm">아침</span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={formData.lunch} onChange={(e) => setFormData({ ...formData, lunch: e.target.checked })} className="rounded text-blue-500" />
+                <span className="text-sm">점심</span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={formData.evening} onChange={(e) => setFormData({ ...formData, evening: e.target.checked })} className="rounded text-blue-500" />
+                <span className="text-sm">저녁</span>
+              </label>
+            </div>
+
+            {/* 재고 관리 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">현재 재고 (개)</label>
+                <input
+                  type="number"
+                  value={formData.current_stock}
+                  onChange={(e) => setFormData({ ...formData, current_stock: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">경고 재고 기준</label>
+                <input
+                  type="number"
+                  value={formData.reorder_threshold}
+                  onChange={(e) => setFormData({ ...formData, reorder_threshold: parseInt(e.target.value) || 5 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* 처방전 정보 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">처방전 정보 (텍스트)</label>
+              <textarea
+                value={formData.prescription_info}
+                onChange={(e) => setFormData({ ...formData, prescription_info: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="처방전 내용을 입력하거나 붙여넣으세요."
+              />
             </div>
 
             {/* 알림 시간 (몇 분 전) */}

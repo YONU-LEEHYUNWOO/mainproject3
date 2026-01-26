@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, Circle, Clock, Loader2 } from 'lucide-react'
 import { medicineAPI } from '../services/api'
 
@@ -23,13 +23,20 @@ interface MedicineItemProps {
  * 복용 완료 버튼 포함
  */
 export const MedicineItem: React.FC<MedicineItemProps> = ({ alarm, onMarkTaken }) => {
-  const [isMarking, setIsMarking] = useState(false)
+  const [completedTimes, setCompletedTimes] = useState<Set<string>>(new Set())
+  const [markingTime, setMarkingTime] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [localTaken, setLocalTaken] = useState(alarm.is_taken || false)
 
-  /**
-   * 복용 시간 목록 가져오기
-   */
+  // alarm prop이 변경될 때 상태 동기화
+  useEffect(() => {
+    const dailyTaken = (alarm as any).daily_taken_times
+    if (dailyTaken) {
+      setCompletedTimes(new Set(dailyTaken.split(',')))
+    } else {
+      setCompletedTimes(new Set())
+    }
+  }, [alarm])
+
   const getTimes = () => {
     const times: string[] = []
     if (alarm.time_1) times.push(alarm.time_1)
@@ -39,19 +46,17 @@ export const MedicineItem: React.FC<MedicineItemProps> = ({ alarm, onMarkTaken }
     return times
   }
 
-  /**
-   * 복용 완료 처리
-   */
-  const handleMarkTaken = async () => {
-    if (isMarking || localTaken) return
+  const handleTimeClick = async (time: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (completedTimes.has(time) || markingTime) return
 
-    setIsMarking(true)
+    setMarkingTime(time)
     setError(null)
 
     try {
-      await medicineAPI.markTaken(alarm.id)
-      setLocalTaken(true)
-      
+      await medicineAPI.markTaken(alarm.id, time)
+      setCompletedTimes(prev => new Set([...prev, time]))
+
       if (onMarkTaken) {
         onMarkTaken(alarm.id)
       }
@@ -61,77 +66,53 @@ export const MedicineItem: React.FC<MedicineItemProps> = ({ alarm, onMarkTaken }
       setTimeout(() => setError(null), 3000)
       console.error('복용 기록 오류:', error)
     } finally {
-      setIsMarking(false)
+      setMarkingTime(null)
     }
   }
 
   const times = getTimes()
-  const currentTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className={`p-4 border rounded-lg transition-colors ${
-      localTaken ? 'bg-green-50 border-green-200' : 'bg-white border-gray-300'
-    } ${error ? 'border-red-300 bg-red-50' : ''}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          {/* 약 이름 */}
-          <h3 className={`text-lg font-semibold ${localTaken ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-            {alarm.medicine_name}
-          </h3>
-          
-          {/* 복용량 */}
-          <p className="text-sm text-gray-600 mt-1">
-            복용량: {alarm.dosage}
-          </p>
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+      <h3 className="text-xl font-bold text-gray-900 mb-3">{alarm.medicine_name}</h3>
+      <p className="text-sm text-gray-600 mb-4">복용량: {alarm.dosage}</p>
 
-          {/* 복용 시간 목록 */}
-          <div className="mt-2 space-y-1">
-            {times.map((time, index) => (
-              <div key={index} className="flex items-center text-sm text-gray-700">
-                <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                <span>{time}</span>
-                {alarm.last_taken && time === alarm.time_1 && (
-                  <span className="ml-2 text-xs text-green-600">(복용 완료)</span>
+      <div className="space-y-2">
+        {times.map((time, index) => {
+          const isCompleted = completedTimes.has(time)
+          const isMarking = markingTime === time
+
+          return (
+            <div
+              key={index}
+              onClick={(e) => handleTimeClick(time, e)}
+              className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all cursor-pointer ${isCompleted
+                ? 'bg-green-50 border-green-300'
+                : 'bg-white border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Clock className="h-6 w-6 text-blue-600" />
+                <span className={`text-lg font-bold ${isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                  {time}
+                </span>
+              </div>
+
+              <div>
+                {isMarking ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                ) : isCompleted ? (
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                ) : (
+                  <Circle className="h-8 w-8 text-gray-400" />
                 )}
               </div>
-            ))}
-          </div>
-
-          {/* 에러 메시지 */}
-          {error && (
-            <p className="text-xs text-red-600 mt-2">{error}</p>
-          )}
-        </div>
-
-        {/* 복용 완료 버튼 */}
-        <div className="ml-4 flex-shrink-0">
-          <button
-            onClick={handleMarkTaken}
-            disabled={isMarking || localTaken}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              localTaken
-                ? 'bg-green-100 text-green-700 cursor-not-allowed'
-                : isMarking
-                ? 'bg-gray-100 text-gray-500 cursor-wait'
-                : 'bg-blue-500 text-white hover:bg-blue-600'
-            }`}
-          >
-            {isMarking ? (
-              <div className="flex items-center">
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                처리 중...
-              </div>
-            ) : localTaken ? (
-              <div className="flex items-center">
-                <CheckCircle className="h-4 w-4 mr-2" />
-                복용 완료
-              </div>
-            ) : (
-              '복용 완료'
-            )}
-          </button>
-        </div>
+            </div>
+          )
+        })}
       </div>
+
+      {error && <p className="text-sm text-red-600 font-bold mt-2">{error}</p>}
     </div>
   )
 }

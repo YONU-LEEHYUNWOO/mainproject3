@@ -18,6 +18,7 @@ from schemas.medicine_alarm import (
 )
 from utils.activity import record_user_activity
 from utils.response import success_response
+from utils.medicine_helpers import sync_medicine_tasks, update_stock_and_notify
 
 router = APIRouter()
 
@@ -67,6 +68,10 @@ async def create_medicine_alarm(
     db.add(db_alarm)
     db.commit()
     db.refresh(db_alarm)
+    
+    # 약 전용 일정 자동 생성
+    sync_medicine_tasks(db, db_alarm)
+    db.commit()
     
     return success_response(
         data=MedicineAlarmResponse.model_validate(db_alarm).dict(),
@@ -205,11 +210,10 @@ async def mark_medicine_taken(
             detail="만료된 약 알림입니다"
         )
 
-    # 복용 완료 처리
-    alarm.mark_taken()
-    # The 'log' variable is not defined in the original code. Assuming it's a placeholder or part of an unprovided context.
-    # For now, I will add the record_user_activity call as instructed, without the 'log' line.
-    # if log: log.taken = True; log.taken_at = datetime.utcnow()
+    # 복용 완료 처리 및 재고 차감
+    alarm.mark_taken(request.time)
+    update_stock_and_notify(db, alarm)
+    
     record_user_activity(db, current_user, f"medicine_taken_{alarm.id}")
     db.commit()
 
@@ -272,7 +276,10 @@ async def get_today_medicine_alarms(
                 "time_4": time_list[3] if len(time_list) > 3 else None,
                 "last_taken": alarm.last_taken.isoformat() if alarm.last_taken else None,
                 "next_reminder": alarm.next_reminder.isoformat() if alarm.next_reminder else None,
-                "is_taken": False,  # TODO: 복용 완료 여부 로직 추가 필요
+                "next_reminder": alarm.next_reminder.isoformat() if alarm.next_reminder else None,
+                "daily_taken_times": alarm.daily_taken_times,
+                # 모든 시간이 완료되었는지 확인
+                "is_taken": all(t in (alarm.daily_taken_times.split(",") if alarm.daily_taken_times else []) for t in [t.strftime("%H:%M") for t in times if t]),
                 "is_active": alarm.is_active
             })
     

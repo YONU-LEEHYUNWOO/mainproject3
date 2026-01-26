@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { EmptyState } from '../components/EmptyState'
 import { Pill, Plus, Loader2 } from 'lucide-react'
+import { useNotifications } from '../hooks/useNotifications'
 
 interface MedicineAlarm {
   id: number
@@ -25,6 +26,12 @@ interface MedicineAlarm {
   next_reminder?: string
   is_taken?: boolean
   is_active?: boolean
+  morning?: boolean
+  lunch?: boolean
+  evening?: boolean
+  current_stock?: number
+  reorder_threshold?: number
+  prescription_info?: string
 }
 
 /**
@@ -35,12 +42,15 @@ interface MedicineAlarm {
 const Medicine = () => {
   const location = useLocation()
   const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
-  
+
   const [alarms, setAlarms] = useState<MedicineAlarm[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingAlarm, setEditingAlarm] = useState<MedicineAlarm | null>(null)
+
+  // 알림 시스템 사용
+  const { scheduleMedicineNotification } = useNotifications()
 
   /**
    * 오늘의 약 알림 목록 로드 (부모 모드)
@@ -53,11 +63,11 @@ const Medicine = () => {
 
     try {
       const response = await medicineAPI.getTodayAlarms()
-      
+
       // API 응답 형식에 따라 데이터 추출
       // 새로운 응답 형식: {status, message, data: {alarms, total}}
       let alarmsData: MedicineAlarm[] = []
-      
+
       if (response.data) {
         // 새로운 통일된 응답 형식: {status, message, data: {alarms: [...]}}
         if (response.data.data?.alarms && Array.isArray(response.data.data.alarms)) {
@@ -76,20 +86,25 @@ const Medicine = () => {
           alarmsData = response.data.data
         }
       }
-      
+
       // 배열이 아닌 경우 빈 배열로 설정
       if (!Array.isArray(alarmsData)) {
         console.warn('API 응답이 배열 형식이 아닙니다:', response.data)
         alarmsData = []
       }
-      
+
       setAlarms(alarmsData)
+
+      // 부모 모드에서 오늘 알림 스케줄링
+      if (Array.isArray(alarmsData)) {
+        alarmsData.filter(a => !a.is_taken).forEach(a => scheduleMedicineNotification(a))
+      }
     } catch (error: any) {
       // 새로운 응답 형식: {status, message, data} 또는 {detail}
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.detail || 
-                          error.message || 
-                          '약 목록을 불러오는데 실패했습니다.'
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.detail ||
+        error.message ||
+        '약 목록을 불러오는데 실패했습니다.'
       setError(errorMessage)
       console.error('약 목록 로드 오류:', error)
       // 에러 발생 시 빈 배열로 설정
@@ -110,11 +125,11 @@ const Medicine = () => {
 
     try {
       const response = await medicineAPI.getAlarms()
-      
+
       // API 응답 형식에 따라 데이터 추출
       // 새로운 응답 형식: {status, message, data: {alarms, total}}
       let alarmsData: MedicineAlarm[] = []
-      
+
       if (response.data) {
         // 새로운 통일된 응답 형식: {status, message, data: {alarms: [...]}}
         if (response.data.data?.alarms && Array.isArray(response.data.data.alarms)) {
@@ -133,13 +148,13 @@ const Medicine = () => {
           alarmsData = response.data.data
         }
       }
-      
+
       // 배열이 아닌 경우 빈 배열로 설정
       if (!Array.isArray(alarmsData)) {
         console.warn('API 응답이 배열 형식이 아닙니다:', response.data)
         alarmsData = []
       }
-      
+
       setAlarms(alarmsData)
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || '약 알림 목록을 불러오는데 실패했습니다.'
@@ -170,7 +185,7 @@ const Medicine = () => {
         alarm.id === alarmId ? { ...alarm, is_taken: true, last_taken: new Date().toISOString() } : alarm
       )
     )
-    
+
     // 백그라운드에서 목록 새로고침
     try {
       await loadTodayAlarms()
@@ -208,10 +223,10 @@ const Medicine = () => {
       await loadAlarms()
     } catch (error: any) {
       // 새로운 응답 형식: {status, message, data} 또는 {detail}
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.detail || 
-                          error.message || 
-                          '약 알림 삭제에 실패했습니다.'
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.detail ||
+        error.message ||
+        '약 알림 삭제에 실패했습니다.'
       alert(errorMessage)
       console.error('약 알림 삭제 오류:', error)
     }
@@ -247,26 +262,57 @@ const Medicine = () => {
     setEditingAlarm(null)
   }
 
-  // 통계 계산 (부모 모드용)
-  // alarms가 배열인지 확인 후 통계 계산
-  const stats = {
-    total: Array.isArray(alarms) ? alarms.length : 0,
-    completed: Array.isArray(alarms) ? alarms.filter(a => a.is_taken).length : 0,
-    remaining: Array.isArray(alarms) ? alarms.filter(a => !a.is_taken).length : 0
+  // 통계 계산 (부모/자식 모드 공통)
+  // alarms가 배열인지 확인 후 복용 횟수 기준으로 통계 계산
+  const getStats = () => {
+    if (!Array.isArray(alarms)) return { total: 0, completed: 0, remaining: 0 }
+
+    let totalDoses = 0
+    let completedDoses = 0
+
+    alarms.forEach(alarm => {
+      // 설정된 시간 개수 파악
+      const times = [alarm.time_1, alarm.time_2, alarm.time_3, alarm.time_4].filter(Boolean)
+      totalDoses += times.length
+
+      // 복용 완료된 시간 개수 계산
+      // is_taken이 true면 해당 약의 모든 시간대가 완료된 것으로 간주
+      if (alarm.is_taken) {
+        completedDoses += times.length
+      }
+    })
+
+    return {
+      total: totalDoses,
+      completed: completedDoses,
+      remaining: totalDoses - completedDoses
+    }
   }
+
+  const stats = getStats()
 
   return (
     <div className="space-y-6">
-      {/* 모드별 제목 */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {mode === 'parent' ? '내 약 복용 관리 👴' : '부모님 약 알림 관리 👨'}
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {mode === 'parent'
-            ? '오늘 복용해야 할 약을 확인하고 기록하세요'
-            : '부모님의 약 복용 알림을 설정하고 관리하세요'}
-        </p>
+      {/* ... (생략된 기존 상단 UI) */}
+      {/* (내용은 view_file로 확인한 구조 유지) */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {mode === 'parent' ? '내 약 복용 관리 👴' : '부모님 약 알림 관리 👨'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {mode === 'parent'
+              ? '오늘 복용해야 할 약을 확인하고 기록하세요'
+              : '부모님의 약 복용 알림을 설정하고 관리하세요'}
+          </p>
+        </div>
+        <button
+          onClick={() => setIsFormOpen(true)}
+          className="btn-primary flex items-center"
+        >
+          <Plus className="mr-2 h-5 w-5" />
+          약 등록
+        </button>
       </div>
 
       {/* 부모 모드: 오늘의 약 목록 */}
@@ -327,16 +373,14 @@ const Medicine = () => {
       {/* 자식 모드: 약 알림 설정 */}
       {mode === 'child' && (
         <>
-          {/* 약 등록 버튼 */}
-          <div className="flex justify-end">
-            <button
-              onClick={() => setIsFormOpen(true)}
-              className="btn-primary flex items-center"
-            >
-              <Plus className="mr-2 h-5 w-5" />
-              약 알림 등록
-            </button>
-          </div>
+          {/* 통계 (자식 모드에서도 부모님 복용 현황 확인) */}
+          {!isLoading && alarms.length > 0 && (
+            <MedicineStats
+              total={stats.total}
+              completed={stats.completed}
+              remaining={stats.remaining}
+            />
+          )}
 
           {/* 약 알림 목록 */}
           <div className="bg-white shadow rounded-lg">
@@ -374,26 +418,31 @@ const Medicine = () => {
               )}
             </div>
           </div>
-
-          {/* 약 알림 등록/수정 폼 */}
-          <MedicineAlarmForm
-            isOpen={isFormOpen}
-            onClose={handleCloseForm}
-            onSubmit={handleSubmitAlarm}
-            initialData={editingAlarm ? {
-              medicine_name: editingAlarm.medicine_name,
-              dosage: editingAlarm.dosage,
-              time_1: editingAlarm.time_1,
-              time_2: editingAlarm.time_2,
-              time_3: editingAlarm.time_3,
-              time_4: editingAlarm.time_4,
-              start_date: editingAlarm.start_date,
-              end_date: editingAlarm.end_date,
-              reminder_minutes: editingAlarm.reminder_minutes || 15
-            } : null}
-          />
         </>
       )}
+
+      {/* 약 알림 등록/수정 폼 - 부모/자식 공통 사용을 위해 밖으로 이동 */}
+      <MedicineAlarmForm
+        isOpen={isFormOpen}
+        onClose={handleCloseForm}
+        onSubmit={handleSubmitAlarm}
+        initialData={editingAlarm ? {
+          medicine_name: editingAlarm.medicine_name,
+          dosage: editingAlarm.dosage || '',
+          time_1: editingAlarm.time_1 || '',
+          time_2: editingAlarm.time_2 || '',
+          time_3: editingAlarm.time_3 || '',
+          time_4: editingAlarm.time_4 || '',
+          start_date: editingAlarm.start_date,
+          end_date: editingAlarm.end_date || '',
+          reminder_minutes: editingAlarm.reminder_minutes || 15,
+          morning: editingAlarm.morning || false,
+          lunch: editingAlarm.lunch || false,
+          evening: editingAlarm.evening || false,
+          current_stock: editingAlarm.current_stock || 0,
+          reorder_threshold: editingAlarm.reorder_threshold || 5
+        } : null}
+      />
     </div>
   )
 }

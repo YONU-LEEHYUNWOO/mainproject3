@@ -107,7 +107,7 @@ const Tasks = () => {
 
   // 날짜별 일정 개수 계산
   const getTaskCountsByDate = () => {
-    const counts: { [key: string]: { total: number; completed: number } } = {}
+    const counts: { [key: string]: { total: number; completed: number; medicineCount: number } } = {}
 
     // tasks가 배열인지 확인
     if (!tasks || !Array.isArray(tasks)) {
@@ -127,11 +127,14 @@ const Tasks = () => {
       }
 
       if (!counts[dateKey]) {
-        counts[dateKey] = { total: 0, completed: 0 }
+        counts[dateKey] = { total: 0, completed: 0, medicineCount: 0 }
       }
       counts[dateKey].total++
       if (task.completed) {
         counts[dateKey].completed++
+      }
+      if (task.category === '약') {
+        counts[dateKey].medicineCount++
       }
     })
 

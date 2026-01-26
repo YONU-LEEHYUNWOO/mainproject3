@@ -100,6 +100,28 @@ export const useNotifications = () => {
     }
   }, [settings, permission, showNotification])
 
+  // 약 알림 스케줄링
+  const scheduleMedicineNotification = useCallback((alarm: any) => {
+    if (!settings.enabled || permission !== 'granted') return
+    const times = [alarm.time_1, alarm.time_2, alarm.time_3, alarm.time_4].filter(Boolean)
+    const today = new Date().toISOString().split('T')[0]
+    const advanceMs = (alarm.reminder_minutes || settings.advanceMinutes) * 60 * 1000
+    times.forEach(time => {
+      const medicineDateTime = new Date(`${today}T${time}`)
+      const notificationTime = new Date(medicineDateTime.getTime() - advanceMs)
+      const delay = notificationTime.getTime() - new Date().getTime()
+      if (delay > 0) {
+        setTimeout(() => {
+          showNotification(`💊 약 복용 알림: ${alarm.medicine_name}`, {
+            body: `${time}에 약(${alarm.dosage})을 복용할 시간입니다.`,
+            tag: `med-${alarm.id}-${time}`,
+            requireInteraction: true
+          })
+        }, delay)
+      }
+    })
+  }, [settings, permission, showNotification])
+
   // 초기화
   useEffect(() => {
     if ('Notification' in window) {
@@ -130,6 +152,7 @@ export const useNotifications = () => {
     requestPermission,
     showNotification,
     scheduleTaskNotification,
+    scheduleMedicineNotification,
     saveSettings
   }
 }

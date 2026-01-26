@@ -1,21 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Bell, BellOff, Clock, Heart, Pill, Utensils, ShoppingCart, Home, MapPin, Star, Trash2, Search, Plus } from 'lucide-react'
+import {
+  Bell, BellOff, Clock, Heart, Pill, Utensils, ShoppingCart,
+  Home, MapPin, Star, Trash2, Search, Plus,
+  Type, MousePointer, Eye
+} from 'lucide-react'
 import { useNotifications } from '../hooks/useNotifications'
+import { useAccessibility } from '../contexts/AccessibilityContext'
 import { NotificationPermissionModal } from '../components/NotificationPermissionModal'
 import api, { favoritesAPI } from '../services/api'
 
 /**
  * Settings 페이지
- * 알림 설정 관리
+ * 접근성, 알림, 자주 가는 장소 관리
  */
 const Settings = () => {
   const location = useLocation()
   const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
 
-  const { permission, settings, requestPermission, saveSettings } = useNotifications()
+  const { permission, settings: notiSettings, requestPermission, saveSettings: saveNotiSettings } = useNotifications()
   const [showPermissionModal, setShowPermissionModal] = useState(false)
-  const [advanceMinutes, setAdvanceMinutes] = useState(settings.advanceMinutes)
+  const [advanceMinutes, setAdvanceMinutes] = useState(notiSettings.advanceMinutes)
+
+  // 접근성 설정 (Context)
+  const {
+    fontSize, setFontSize,
+    buttonSize, setButtonSize,
+    highContrast, setHighContrast
+  } = useAccessibility()
 
   // 자주 가는 장소 상태
   const [favorites, setFavorites] = useState<any[]>([])
@@ -151,32 +163,23 @@ const Settings = () => {
     }
   }
 
-  /**
-   * 알림 설정 토글
-   */
   const handleToggleNotifications = () => {
     if (permission !== 'granted') {
       setShowPermissionModal(true)
     } else {
-      saveSettings({ enabled: !settings.enabled })
+      saveNotiSettings({ enabled: !notiSettings.enabled })
     }
   }
 
-  /**
-   * 알림 시간 변경
-   */
   const handleAdvanceMinutesChange = (minutes: number) => {
     setAdvanceMinutes(minutes)
-    saveSettings({ advanceMinutes: minutes })
+    saveNotiSettings({ advanceMinutes: minutes })
   }
 
-  /**
-   * 권한 요청 핸들러
-   */
   const handleRequestPermission = async () => {
     const granted = await requestPermission()
     if (granted) {
-      saveSettings({ enabled: true })
+      saveNotiSettings({ enabled: true })
     }
     return granted
   }
@@ -190,9 +193,94 @@ const Settings = () => {
         </h1>
         <p className="text-sm text-gray-500 mt-1">
           {mode === 'parent'
-            ? '계정 정보와 알림 설정을 관리하세요'
+            ? '화면 크기, 알림, 자주 가는 장소를 설정하세요'
             : '부모님 계정 관리 및 알림 설정을 변경하세요'}
         </p>
+      </div>
+
+      {/* 접근성 설정 섹션 (최상단 배치) */}
+      <div className="bg-white shadow rounded-lg overflow-hidden border-l-4 border-blue-500">
+        <div className="p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
+            <Eye className="w-5 h-5 mr-2 text-blue-600" />
+            화면 설정 (접근성)
+          </h2>
+
+          <div className="space-y-8">
+            {/* 글자 크기 */}
+            <div>
+              <label className="text-base font-medium text-gray-900 flex items-center mb-3">
+                <Type className="w-5 h-5 mr-2 text-gray-500" />
+                글자 크기
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: 'normal', label: '보통' },
+                  { value: 'large', label: '크게' },
+                  { value: 'xlarge', label: '아주 크게' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setFontSize(option.value as any)}
+                    className={`py-3 px-4 rounded-lg border-2 text-center transition-all ${fontSize === option.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      }`}
+                  >
+                    <span className={`${option.value === 'normal' ? 'text-base' :
+                        option.value === 'large' ? 'text-lg' : 'text-xl'
+                      }`}>
+                      {option.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 my-4"></div>
+
+            {/* 버튼 크기 & 고대비 (2단 그리드) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 버튼 크기 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-medium text-gray-900 flex items-center">
+                    <MousePointer className="w-5 h-5 mr-2 text-gray-500" />
+                    큰 버튼 모드
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">버튼과 입력창을 더 크게 표시합니다</p>
+                </div>
+                <button
+                  onClick={() => setButtonSize(buttonSize === 'normal' ? 'large' : 'normal')}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${buttonSize === 'large' ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                >
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${buttonSize === 'large' ? 'translate-x-7' : 'translate-x-1'
+                    }`} />
+                </button>
+              </div>
+
+              {/* 고대비 모드 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-medium text-gray-900 flex items-center">
+                    <Eye className="w-5 h-5 mr-2 text-gray-500" />
+                    고대비 모드
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">색상 대비를 높여 선명하게 봅니다</p>
+                </div>
+                <button
+                  onClick={() => setHighContrast(!highContrast)}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${highContrast ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                >
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${highContrast ? 'translate-x-7' : 'translate-x-1'
+                    }`} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 알림 설정 섹션 */}
@@ -205,7 +293,7 @@ const Settings = () => {
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center space-x-3">
-                  {settings.enabled && permission === 'granted' ? (
+                  {notiSettings.enabled && permission === 'granted' ? (
                     <Bell className="h-5 w-5 text-green-500" />
                   ) : (
                     <BellOff className="h-5 w-5 text-gray-400" />
@@ -224,13 +312,13 @@ const Settings = () => {
               </div>
               <button
                 onClick={handleToggleNotifications}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${settings.enabled && permission === 'granted'
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${notiSettings.enabled && permission === 'granted'
                   ? 'bg-blue-500'
                   : 'bg-gray-200'
                   }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.enabled && permission === 'granted'
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${notiSettings.enabled && permission === 'granted'
                     ? 'translate-x-5'
                     : 'translate-x-0'
                     }`}
@@ -239,7 +327,7 @@ const Settings = () => {
             </div>
 
             {/* 알림 시간 설정 (권한이 있을 때만 표시) */}
-            {permission === 'granted' && settings.enabled && (
+            {permission === 'granted' && notiSettings.enabled && (
               <div className="border-t pt-6">
                 <div className="flex items-center space-x-3 mb-4">
                   <Clock className="h-5 w-5 text-gray-400" />
@@ -286,7 +374,7 @@ const Settings = () => {
         <div className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">자주 가는 장소 관리 📍</h2>
 
-          {/* 카테고리 탭 */}
+          {/* 카테고리 탭 (기존 코드 유지) */}
           <div className="flex space-x-2 overflow-x-auto pb-4 scrollbar-hide">
             {[
               { id: 'hospital', name: '병원', icon: Heart },

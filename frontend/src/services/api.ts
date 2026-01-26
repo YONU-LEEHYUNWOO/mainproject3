@@ -247,8 +247,8 @@ export const medicineAPI = {
   deleteAlarm: (id: number) =>
     api.delete(`/api/medicine/alarms/${id}`),
 
-  markTaken: (alarmId: number) =>
-    api.post('/api/medicine/taken', { alarm_id: alarmId }),
+  markTaken: (alarmId: number, time?: string) =>
+    api.post('/api/medicine/taken', { alarm_id: alarmId, time }),
 
   getTodayAlarms: (userId?: number) =>
     api.get('/api/medicine/today', { params: { user_id: userId } }),

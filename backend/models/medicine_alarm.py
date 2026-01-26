@@ -30,20 +30,35 @@ class MedicineAlarm(BaseModel):
     reminder_minutes: int = Column(Integer, default=0, nullable=False)  # 리마인더 시간 (분)
 
     # 복용 시간 (하루 최대 4회)
-    time_1: time = Column(Time, nullable=True)  # 첫 번째 복용 시간
-    time_2: time = Column(Time, nullable=True)  # 두 번째 복용 시간
-    time_3: time = Column(Time, nullable=True)  # 세 번째 복용 시간
-    time_4: time = Column(Time, nullable=True)  # 네 번째 복용 시간
+    time_1: time = Column(Time, nullable=True)
+    time_2: time = Column(Time, nullable=True)
+    time_3: time = Column(Time, nullable=True)
+    time_4: time = Column(Time, nullable=True)
+
+    # 복용 시간 타입 (아침/점심/저녁)
+    morning: bool = Column(Boolean, default=False)
+    lunch: bool = Column(Boolean, default=False)
+    evening: bool = Column(Boolean, default=False)
 
     # 복용 상태
-    last_taken: datetime = Column(DateTime, nullable=True)  # 마지막 복용 시간
-    next_reminder: datetime = Column(DateTime, nullable=True)  # 다음 알림 시간
+    last_taken: datetime = Column(DateTime, nullable=True)
+    next_reminder: datetime = Column(DateTime, nullable=True)
+    # 오늘 복용한 시간 목록 (콤마로 구분, 예: "08:00,12:00")
+    # 매일 자정 또는 첫 조회 시 리셋 필요
+    daily_taken_times: str = Column(String(500), default="", nullable=True)
+
+    # 재고 및 처방전 정보
+    current_stock: int = Column(Integer, default=0)
+    reorder_threshold: int = Column(Integer, default=5)
+    prescription_info: str = Column(Text, nullable=True)
+    favorite_pharmacy_id: int = Column(Integer, nullable=True)
 
     # 외래 키
     user_id: int = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     # 관계 설정
     user = relationship("User", back_populates="medicine_alarms")
+    tasks = relationship("Task", back_populates="medicine_alarm", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<MedicineAlarm(id={self.id}, medicine_name={self.medicine_name}, active={self.is_active})>"
@@ -107,7 +122,22 @@ class MedicineAlarm(BaseModel):
             return date.today() > self.end_date
         return False
 
-    def mark_taken(self):
-        """복용 완료 처리"""
-        self.last_taken = datetime.now()
+    def mark_taken(self, time_str=None):
+        """복용 완료 처리 및 기록"""
+        now = datetime.now()
+        today_date = now.date()
+        
+        # 마지막 복용 날짜가 오늘이 아니면 기록 초기화
+        if self.last_taken and self.last_taken.date() != today_date:
+            self.daily_taken_times = ""
+        
+        self.last_taken = now
+        
+        if time_str:
+            # 이미 기록된 시간이 아니면 추가
+            current_taken = self.daily_taken_times.split(",") if self.daily_taken_times else []
+            if time_str not in current_taken:
+                current_taken.append(time_str)
+                self.daily_taken_times = ",".join(current_taken)
+        
         self.calculate_next_reminder()

@@ -25,9 +25,11 @@ class Task(BaseModel):
 
     # 외래 키
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    medicine_alarm_id = Column(Integer, ForeignKey("medicine_alarms.id"), nullable=True)
 
     # 관계 설정
     owner = relationship("User", back_populates="tasks")
+    medicine_alarm = relationship("MedicineAlarm", back_populates="tasks")
     notification_logs = relationship("NotificationLog", back_populates="task")
 
     def __repr__(self):

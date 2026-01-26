@@ -184,6 +184,47 @@ def ensure_schema():
                     if 'error_message' not in columns:
                         print("[DB-CHECK] notification_logs 테이블에 error_message 컬럼 추가 중...")
                         conn.execute(text("ALTER TABLE notification_logs ADD COLUMN error_message VARCHAR(500)"))
+
+        # 6. medicine_alarms 테이블 확인
+        if 'medicine_alarms' in tables:
+            with engine.begin() as conn:
+                result = conn.execute(text("PRAGMA table_info(medicine_alarms)"))
+                columns = [row[1] for row in result.fetchall()]
+                
+                if 'daily_taken_times' not in columns:
+                    print("[DB-CHECK] medicine_alarms 테이블에 daily_taken_times 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN daily_taken_times VARCHAR(500) DEFAULT ''"))
+                
+                if 'current_stock' not in columns:
+                    print("[DB-CHECK] medicine_alarms 테이블에 current_stock 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN current_stock INTEGER DEFAULT 0"))
+
+                if 'reorder_threshold' not in columns:
+                    print("[DB-CHECK] medicine_alarms 테이블에 reorder_threshold 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN reorder_threshold INTEGER DEFAULT 5"))
+                
+                if 'prescription_info' not in columns:
+                    print("[DB-CHECK] medicine_alarms 테이블에 prescription_info 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN prescription_info TEXT"))
+
+                if 'favorite_pharmacy_id' not in columns:
+                    print("[DB-CHECK] medicine_alarms 테이블에 favorite_pharmacy_id 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN favorite_pharmacy_id INTEGER"))
+
+                    print("[DB-CHECK] medicine_alarms 테이블에 시간대 컬럼(morning/lunch/evening) 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN morning BOOLEAN DEFAULT 0"))
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN lunch BOOLEAN DEFAULT 0"))
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN evening BOOLEAN DEFAULT 0"))
+
+        # 7. tasks 테이블 확인 (medicine_alarm_id)
+        if 'tasks' in tables:
+            with engine.begin() as conn:
+                result = conn.execute(text("PRAGMA table_info(tasks)"))
+                columns = [row[1] for row in result.fetchall()]
+                
+                if 'medicine_alarm_id' not in columns:
+                    print("[DB-CHECK] tasks 테이블에 medicine_alarm_id 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE tasks ADD COLUMN medicine_alarm_id INTEGER"))
         
         print("[DB-CHECK] 모든 스키마 검사 완료")
     except Exception as e:

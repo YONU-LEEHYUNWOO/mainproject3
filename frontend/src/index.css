@@ -68,3 +68,63 @@ code {
 .btn-danger {
   @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors;
 }
+
+/* =========================================
+   접근성 설정 스타일 (User Accessibility)
+   ========================================= */
+
+:root {
+  --base-font-size: 16px;
+}
+
+/* 폰트 크기 조절 */
+html.text-normal {
+  font-size: 16px;
+}
+
+html.text-large {
+  font-size: 18px; /* 약 112.5% */
+}
+
+html.text-xlarge {
+  font-size: 20px; /* 약 125% */
+}
+
+/* 큰 버튼 모드 */
+/* .btn-large 클래스가 html에 적용되면 모든 버튼의 패딩과 폰트 크기를 키움 */
+html.btn-large button:not(.no-scale),
+html.btn-large .btn-primary,
+html.btn-large .btn-secondary,
+html.btn-large .btn-danger,
+html.btn-large a.group,
+html.btn-large input,
+html.btn-large select {
+  @apply py-3 px-6 text-lg;
+}
+
+/* 사이드바 메뉴 아이템 확장 */
+html.btn-large nav a {
+  @apply py-4;
+}
+
+/* 고대비 모드 */
+html.high-contrast {
+  filter: contrast(1.2);
+}
+
+html.high-contrast .btn-primary {
+  @apply bg-blue-800 hover:bg-blue-900 border-2 border-white;
+}
+
+html.high-contrast .text-gray-500,
+html.high-contrast .text-gray-600 {
+  @apply text-gray-900 font-medium;
+}
+
+html.high-contrast .bg-gray-50 {
+  @apply bg-white;
+}
+
+html.high-contrast .border-gray-200 {
+  @apply border-gray-400;
+}
