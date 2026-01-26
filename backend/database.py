@@ -124,20 +124,66 @@ def ensure_schema():
         # 5. notification_logs 테이블 및 컬럼 확인
         if 'notification_logs' in tables:
             with engine.begin() as conn:
+                # 테이블 정보 조회
                 result = conn.execute(text("PRAGMA table_info(notification_logs)"))
-                columns = [row[1] for row in result.fetchall()]
+                columns_info = result.fetchall()
+                columns = [row[1] for row in columns_info]
                 
-                if 'is_read' not in columns:
-                    print("[DB-CHECK] notification_logs 테이블에 is_read 컬럼 추가 중...")
-                    conn.execute(text("ALTER TABLE notification_logs ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT 0"))
+                # task_id 컬럼의 NOT NULL 제약조건 확인 (row[1]은 이름, row[3]는 notnull)
+                task_id_info = next((row for row in columns_info if row[1] == 'task_id'), None)
+                task_id_not_null = task_id_info[3] if task_id_info else 0
                 
-                if 'task_id' not in columns:
-                    print("[DB-CHECK] notification_logs 테이블에 task_id 컬럼 추가 중...")
-                    conn.execute(text("ALTER TABLE notification_logs ADD COLUMN task_id INTEGER"))
+                # task_id가 있고 NOT NULL 제약조건이 걸려있다면 테이블 재생성 필요 (SQLite 제약조건 수정 불가)
+                if task_id_info and task_id_not_null:
+                    print("[DB-CHECK] notification_logs.task_id의 NOT NULL 제약조건을 제거하기 위해 테이블을 재설계합니다...")
                     
-                if 'error_message' not in columns:
-                    print("[DB-CHECK] notification_logs 테이블에 error_message 컬럼 추가 중...")
-                    conn.execute(text("ALTER TABLE notification_logs ADD COLUMN error_message VARCHAR(500)"))
+                    # 1. 임시 테이블 이름 변경
+                    conn.execute(text("ALTER TABLE notification_logs RENAME TO notification_logs_old"))
+                    
+                    # 2. 새 테이블 생성 (올바른 스키마)
+                    conn.execute(text("""
+                        CREATE TABLE notification_logs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            task_id INTEGER,
+                            user_id INTEGER NOT NULL,
+                            notification_type VARCHAR(50) NOT NULL,
+                            title VARCHAR(100) NOT NULL,
+                            message TEXT,
+                            sent_at DATETIME,
+                            is_success BOOLEAN NOT NULL DEFAULT 0,
+                            is_read BOOLEAN NOT NULL DEFAULT 0,
+                            error_message VARCHAR(500),
+                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (task_id) REFERENCES tasks (id),
+                            FOREIGN KEY (user_id) REFERENCES users (id)
+                        )
+                    """))
+                    
+                    # 3. 데이터 복사 (존재하는 컬럼만)
+                    # task_id가 없는 경우도 고려하여 공통 컬럼만 복사
+                    common_cols = [c for c in columns if c in ['id', 'user_id', 'notification_type', 'title', 'message', 'sent_at', 'is_success', 'created_at', 'updated_at', 'task_id']]
+                    cols_str = ", ".join(common_cols)
+                    
+                    conn.execute(text(f"INSERT INTO notification_logs ({cols_str}) SELECT {cols_str} FROM notification_logs_old"))
+                    
+                    # 4. 기존 테이블 삭제
+                    conn.execute(text("DROP TABLE notification_logs_old"))
+                    print("[DB-CHECK] notification_logs 테이블 재설계 완료")
+                    
+                else:
+                    # 기존 컬럼 추가 로직 (테이블 재생성을 안 했을 경우에만 실행)
+                    if 'is_read' not in columns:
+                        print("[DB-CHECK] notification_logs 테이블에 is_read 컬럼 추가 중...")
+                        conn.execute(text("ALTER TABLE notification_logs ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT 0"))
+                    
+                    if 'task_id' not in columns:
+                        print("[DB-CHECK] notification_logs 테이블에 task_id 컬럼 추가 중...")
+                        conn.execute(text("ALTER TABLE notification_logs ADD COLUMN task_id INTEGER"))
+                        
+                    if 'error_message' not in columns:
+                        print("[DB-CHECK] notification_logs 테이블에 error_message 컬럼 추가 중...")
+                        conn.execute(text("ALTER TABLE notification_logs ADD COLUMN error_message VARCHAR(500)"))
         
         print("[DB-CHECK] 모든 스키마 검사 완료")
     except Exception as e:
