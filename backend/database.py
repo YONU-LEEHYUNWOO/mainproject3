@@ -121,6 +121,24 @@ def ensure_schema():
                 """))
             print("[DB-CHECK] frequent_items 테이블 생성 완료")
         
+        # 5. notification_logs 테이블 및 컬럼 확인
+        if 'notification_logs' in tables:
+            with engine.begin() as conn:
+                result = conn.execute(text("PRAGMA table_info(notification_logs)"))
+                columns = [row[1] for row in result.fetchall()]
+                
+                if 'is_read' not in columns:
+                    print("[DB-CHECK] notification_logs 테이블에 is_read 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE notification_logs ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT 0"))
+                
+                if 'task_id' not in columns:
+                    print("[DB-CHECK] notification_logs 테이블에 task_id 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE notification_logs ADD COLUMN task_id INTEGER"))
+                    
+                if 'error_message' not in columns:
+                    print("[DB-CHECK] notification_logs 테이블에 error_message 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE notification_logs ADD COLUMN error_message VARCHAR(500)"))
+        
         print("[DB-CHECK] 모든 스키마 검사 완료")
     except Exception as e:
         print(f"[DB-CHECK] 오류 발생: {e}")
