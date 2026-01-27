@@ -425,6 +425,14 @@ try:
     except Exception as e:
         print(f"parent_requests 라우터 등록 오류: {e}")
 
+    # 건강 기록 라우터 등록
+    try:
+        import routers.health as health
+        app.include_router(health.router, prefix="/api/health", tags=["건강기록"])
+        print("건강 기록 라우터 등록 완료: /api/health")
+    except Exception as e:
+        print(f"health 라우터 등록 오류: {e}")
+
     print("\n라우터 등록 프로세스 완료!")
 
     print("\n모든 라우터 등록 완료!")

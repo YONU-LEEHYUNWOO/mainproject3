@@ -1,217 +1,345 @@
-import { useState } from 'react'
-import { Activity, Heart, Footprints, Download, FileText, TrendingUp } from 'lucide-react'
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { Heart, Activity, Droplet, Plus, TrendingUp, Calendar } from 'lucide-react'
+import { healthAPI } from '../services/api'
+import { useVoice } from '../hooks/useVoice'
+import { VisualFeedback, AnimatedButton, LoadingOverlay } from '../components/VisualFeedback'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-/**
- * Health 페이지
- * 건강 데이터 시각화 및 리포트 (부모 모드)
- */
+interface HealthRecord {
+  id: number
+  record_type: string
+  systolic?: number
+  diastolic?: number
+  glucose?: number
+  weight?: number
+  measured_at: string
+  notes?: string
+}
+
 const Health = () => {
-  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const location = useLocation()
+  const mode = location.pathname.startsWith('/parent') ? 'parent' : 'child'
+  
+  const [activeType, setActiveType] = useState<'blood_pressure' | 'glucose' | 'weight'>('blood_pressure')
+  const [records, setRecords] = useState<HealthRecord[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  
+  // 입력 폼 상태
+  const [formData, setFormData] = useState({
+    systolic: '',
+    diastolic: '',
+    glucose: '',
+    weight: '',
+    notes: ''
+  })
 
-  // 샘플 데이터 (API 연동 전)
-  const weeklyHealthData = [
-    { day: '월', steps: 8000, heartRate: 75, activity: 65 },
-    { day: '화', steps: 7500, heartRate: 73, activity: 60 },
-    { day: '수', steps: 9200, heartRate: 76, activity: 75 },
-    { day: '목', steps: 6800, heartRate: 74, activity: 55 },
-    { day: '금', steps: 8500, heartRate: 75, activity: 70 },
-    { day: '토', steps: 6000, heartRate: 72, activity: 50 },
-    { day: '일', steps: 5500, heartRate: 71, activity: 45 },
-  ]
+  const voiceEnabled = localStorage.getItem('voiceEnabled') !== 'false'
+  const { announceSuccess, speak } = useVoice(voiceEnabled && mode === 'parent')
 
-  const monthlyHealthData = [
-    { week: '1주', steps: 52000, heartRate: 74, activity: 62 },
-    { week: '2주', steps: 48000, heartRate: 73, activity: 58 },
-    { week: '3주', steps: 55000, heartRate: 75, activity: 68 },
-    { week: '4주', steps: 51000, heartRate: 74, activity: 64 },
-  ]
-
-  const currentData = period === 'weekly' ? weeklyHealthData : monthlyHealthData
-
-  // 건강 요약 통계
-  const healthSummary = {
-    avgHeartRate: 74,
-    avgSteps: 7200,
-    avgActivity: 62,
-    weeklyTrend: 'up' as 'up' | 'down' | 'stable'
+  // 건강 기록 불러오기
+  const loadRecords = async () => {
+    setIsLoading(true)
+    try {
+      const response = await healthAPI.getRecords({ record_type: activeType, limit: 30 })
+      const data = response.data.data || response.data
+      setRecords(data.records || [])
+    } catch (error) {
+      console.error('건강 기록 로드 오류:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  /**
-   * 리포트 생성
-   */
-  const handleGenerateReport = () => {
-    // TODO: API로 리포트 생성
-    alert('건강 리포트 생성 기능은 API 연동 후 사용 가능합니다.')
+  useEffect(() => {
+    loadRecords()
+  }, [activeType])
+
+  // 건강 기록 추가
+  const handleSubmit = async () => {
+    try {
+      setIsLoading(true)
+      
+      const data: any = {
+        record_type: activeType,
+        notes: formData.notes
+      }
+
+      if (activeType === 'blood_pressure') {
+        if (!formData.systolic || !formData.diastolic) {
+          alert('혈압 수치를 입력해주세요')
+          return
+        }
+        data.systolic = parseInt(formData.systolic)
+        data.diastolic = parseInt(formData.diastolic)
+      } else if (activeType === 'glucose') {
+        if (!formData.glucose) {
+          alert('혈당 수치를 입력해주세요')
+          return
+        }
+        data.glucose = parseFloat(formData.glucose)
+      } else if (activeType === 'weight') {
+        if (!formData.weight) {
+          alert('체중을 입력해주세요')
+          return
+        }
+        data.weight = parseFloat(formData.weight)
+      }
+
+      await healthAPI.createRecord(data)
+      
+      // 성공 피드백
+      setFeedbackMessage('기록되었습니다! 잘하셨어요!')
+      setShowFeedback(true)
+      
+      if (voiceEnabled && mode === 'parent') {
+        announceSuccess('건강 기록이 저장되었습니다')
+      }
+
+      // 폼 초기화
+      setFormData({ systolic: '', diastolic: '', glucose: '', weight: '', notes: '' })
+      setShowForm(false)
+      
+      // 목록 새로고침
+      await loadRecords()
+      
+    } catch (error: any) {
+      alert(error.response?.data?.message || '기록 저장에 실패했습니다')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  /**
-   * 데이터 내보내기
-   */
-  const handleExportData = (format: 'csv' | 'json') => {
-    // TODO: 데이터 내보내기
-    alert(`${format.toUpperCase()} 형식으로 내보내기 기능은 API 연동 후 사용 가능합니다.`)
-  }
+  // 차트 데이터 준비
+  const chartData = records.slice(0, 10).reverse().map(record => {
+    const date = new Date(record.measured_at)
+    return {
+      date: `${date.getMonth() + 1}/${date.getDate()}`,
+      value: activeType === 'blood_pressure' 
+        ? record.systolic 
+        : activeType === 'glucose' 
+        ? record.glucose 
+        : record.weight,
+      label: activeType === 'blood_pressure' 
+        ? `${record.systolic}/${record.diastolic}` 
+        : activeType === 'glucose'
+        ? `${record.glucose}mg/dL`
+        : `${record.weight}kg`
+    }
+  })
 
-  return (
-    <div className="space-y-6">
-      {/* 제목 */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">내 건강 데이터 📈</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          건강 데이터를 확인하고 리포트를 생성하세요
-        </p>
-      </div>
+  // 부모 모드 UI
+  if (mode === 'parent') {
+    return (
+      <div className="space-y-6">
+        <VisualFeedback
+          show={showFeedback}
+          type="success"
+          message={feedbackMessage}
+          onClose={() => setShowFeedback(false)}
+        />
+        
+        <LoadingOverlay show={isLoading} message="처리 중입니다..." />
 
-      {/* 건강 요약 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <Heart className="h-5 w-5 text-red-500" />
-            <h3 className="text-sm font-medium text-gray-600">평균 심박수</h3>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{healthSummary.avgHeartRate}</p>
-          <p className="text-sm text-gray-500 mt-1">bpm (정상 범위)</p>
-        </div>
-
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <Footprints className="h-5 w-5 text-blue-500" />
-            <h3 className="text-sm font-medium text-gray-600">평균 걸음 수</h3>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">
-            {healthSummary.avgSteps.toLocaleString()}
+        {/* 제목 */}
+        <div>
+          <h1 className="text-4xl font-bold text-gray-900">❤️ 내 건강 관리</h1>
+          <p className="text-xl text-gray-600 mt-2 font-medium">
+            혈압, 혈당, 체중을 기록하고 관리하세요
           </p>
-          <p className="text-sm text-gray-500 mt-1">걸음/일</p>
         </div>
 
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <Activity className="h-5 w-5 text-purple-500" />
-            <h3 className="text-sm font-medium text-gray-600">평균 활동량</h3>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{healthSummary.avgActivity}%</p>
-          <div className="flex items-center mt-1">
-            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-            <p className="text-sm text-gray-500">전주 대비 증가</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 건강 데이터 차트 */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">건강 데이터 추이</h2>
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            {(['weekly', 'monthly'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  period === p
-                    ? 'bg-white text-gray-900 shadow'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {p === 'weekly' ? '주간' : '월간'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <ResponsiveContainer width="100%" height={350}>
-          <AreaChart data={currentData}>
-            <defs>
-              <linearGradient id="colorSteps" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="colorHeartRate" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey={period === 'weekly' ? 'day' : 'week'} />
-            <YAxis yAxisId="left" />
-            <YAxis yAxisId="right" orientation="right" />
-            <Tooltip />
-            <Legend />
-            <Area
-              yAxisId="left"
-              type="monotone"
-              dataKey="steps"
-              stroke="#3b82f6"
-              fillOpacity={1}
-              fill="url(#colorSteps)"
-              name="걸음 수"
-            />
-            <Area
-              yAxisId="right"
-              type="monotone"
-              dataKey="heartRate"
-              stroke="#ef4444"
-              fillOpacity={1}
-              fill="url(#colorHeartRate)"
-              name="심박수 (bpm)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* 활동량 차트 */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">활동량 추이</h2>
-        <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={currentData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey={period === 'weekly' ? 'day' : 'week'} />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="activity"
-              stroke="#8b5cf6"
-              strokeWidth={2}
-              name="활동량 (%)"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* 리포트 및 내보내기 */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">건강 리포트</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 카테고리 선택 */}
+        <div className="grid grid-cols-3 gap-4">
           <button
-            onClick={handleGenerateReport}
-            className="flex items-center justify-center space-x-2 px-4 py-3 border-2 border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+            onClick={() => { setActiveType('blood_pressure'); if (voiceEnabled) speak('혈압 기록') }}
+            className={`btn-press-effect p-6 rounded-2xl transition-all transform hover:scale-105 ${
+              activeType === 'blood_pressure'
+                ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-2xl'
+                : 'bg-white text-gray-700 border-2 border-gray-200'
+            }`}
           >
-            <FileText className="h-5 w-5" />
-            <span>리포트 생성</span>
+            <Heart className="h-12 w-12 mx-auto mb-3" />
+            <p className="text-2xl font-bold">혈압</p>
           </button>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => handleExportData('csv')}
-              className="flex-1 flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Download className="h-5 w-5" />
-              <span>CSV 내보내기</span>
-            </button>
-            <button
-              onClick={() => handleExportData('json')}
-              className="flex-1 flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Download className="h-5 w-5" />
-              <span>JSON 내보내기</span>
-            </button>
-          </div>
+
+          <button
+            onClick={() => { setActiveType('glucose'); if (voiceEnabled) speak('혈당 기록') }}
+            className={`btn-press-effect p-6 rounded-2xl transition-all transform hover:scale-105 ${
+              activeType === 'glucose'
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-2xl'
+                : 'bg-white text-gray-700 border-2 border-gray-200'
+            }`}
+          >
+            <Droplet className="h-12 w-12 mx-auto mb-3" />
+            <p className="text-2xl font-bold">혈당</p>
+          </button>
+
+          <button
+            onClick={() => { setActiveType('weight'); if (voiceEnabled) speak('체중 기록') }}
+            className={`btn-press-effect p-6 rounded-2xl transition-all transform hover:scale-105 ${
+              activeType === 'weight'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-2xl'
+                : 'bg-white text-gray-700 border-2 border-gray-200'
+            }`}
+          >
+            <Activity className="h-12 w-12 mx-auto mb-3" />
+            <p className="text-2xl font-bold">체중</p>
+          </button>
         </div>
-        <p className="text-xs text-gray-500 mt-4">
-          * 리포트 생성 및 데이터 내보내기 기능은 API 연동 후 사용 가능합니다.
-        </p>
+
+        {/* 입력 폼 */}
+        {!showForm ? (
+          <AnimatedButton
+            onClick={() => setShowForm(true)}
+            variant="primary"
+            className="w-full py-8 text-2xl"
+          >
+            <Plus className="h-8 w-8 mr-3" />
+            새로 기록하기
+          </AnimatedButton>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-xl p-8 border-4 border-blue-200">
+            <h2 className="text-3xl font-bold mb-6 text-gray-900">
+              {activeType === 'blood_pressure' ? '혈압 측정' : activeType === 'glucose' ? '혈당 측정' : '체중 측정'}
+            </h2>
+
+            {activeType === 'blood_pressure' && (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xl font-bold text-gray-700 mb-3">수축기 (높은 수치)</label>
+                  <input
+                    type="number"
+                    value={formData.systolic}
+                    onChange={(e) => setFormData({ ...formData, systolic: e.target.value })}
+                    className="w-full px-6 py-4 text-3xl border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-200"
+                    placeholder="120"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xl font-bold text-gray-700 mb-3">이완기 (낮은 수치)</label>
+                  <input
+                    type="number"
+                    value={formData.diastolic}
+                    onChange={(e) => setFormData({ ...formData, diastolic: e.target.value })}
+                    className="w-full px-6 py-4 text-3xl border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-200"
+                    placeholder="80"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeType === 'glucose' && (
+              <div>
+                <label className="block text-xl font-bold text-gray-700 mb-3">혈당 (mg/dL)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.glucose}
+                  onChange={(e) => setFormData({ ...formData, glucose: e.target.value })}
+                  className="w-full px-6 py-4 text-3xl border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-200"
+                  placeholder="100"
+                />
+              </div>
+            )}
+
+            {activeType === 'weight' && (
+              <div>
+                <label className="block text-xl font-bold text-gray-700 mb-3">체중 (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.weight}
+                  onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                  className="w-full px-6 py-4 text-3xl border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-200"
+                  placeholder="70"
+                />
+              </div>
+            )}
+
+            <div className="mt-6">
+              <label className="block text-xl font-bold text-gray-700 mb-3">메모 (선택)</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="w-full px-6 py-4 text-xl border-4 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-200"
+                placeholder="예: 아침 식사 후, 컨디션 좋음"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <AnimatedButton
+                onClick={handleSubmit}
+                variant="success"
+                className="flex-1 py-6 text-2xl"
+              >
+                ✓ 기록하기
+              </AnimatedButton>
+              <AnimatedButton
+                onClick={() => setShowForm(false)}
+                variant="danger"
+                className="px-8 py-6 text-2xl"
+              >
+                ✕
+              </AnimatedButton>
+            </div>
+          </div>
+        )}
+
+        {/* 최근 기록 */}
+        {records.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h3 className="text-2xl font-bold mb-4 flex items-center">
+              <Calendar className="h-6 w-6 mr-2" />
+              최근 기록
+            </h3>
+            
+            {/* 간단한 차트 */}
+            {chartData.length > 0 && (
+              <div className="mb-6">
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" style={{ fontSize: '14px' }} />
+                    <YAxis style={{ fontSize: '14px' }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {records.slice(0, 5).map((record) => (
+                <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="text-xl font-bold">
+                      {activeType === 'blood_pressure' && `${record.systolic}/${record.diastolic}`}
+                      {activeType === 'glucose' && `${record.glucose} mg/dL`}
+                      {activeType === 'weight' && `${record.weight} kg`}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {new Date(record.measured_at).toLocaleString('ko-KR')}
+                    </p>
+                  </div>
+                  <TrendingUp className="h-6 w-6 text-green-500" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+    )
+  }
+
+  // 자식 모드는 모니터링 페이지에서 처리
+  return (
+    <div className="text-center py-12">
+      <p className="text-lg text-gray-600">부모님의 건강 기록은 모니터링 페이지에서 확인하세요</p>
     </div>
   )
 }

@@ -19,17 +19,29 @@ def create_request(req: ParentRequestCreate, u: User = Depends(get_current_user)
     db_req = ParentRequest(content=req.content, user_id=u.id)
     db.add(db_req); db.commit(); db.refresh(db_req)
     
-    # 보호자들에게 알림 생성
+    # 보호자들에게 알림 생성 (중복 방지)
     gs = db.query(Guardian).filter(Guardian.user_id == u.id).all()
+    print(f"[DEBUG] 요청 생성: user_id={u.id}, 총 Guardian 수={len(gs)}")
+    
+    # guardian_user_id 중복 제거
+    unique_guardians = {}
     for g in gs:
-        if g.guardian_user_id:
-            n = NotificationLog(
-                user_id=g.guardian_user_id,
-                notification_type="parent_request",
-                title=f"{u.full_name or u.username}님의 새로운 요청",
-                message=req.content
-            )
-            db.add(n)
+        if g.guardian_user_id and g.guardian_user_id not in unique_guardians:
+            unique_guardians[g.guardian_user_id] = g
+            print(f"[DEBUG] 알림 전송 대상 추가: guardian_user_id={g.guardian_user_id}")
+    
+    print(f"[DEBUG] 중복 제거 후 알림 전송 대상 수: {len(unique_guardians)}")
+    
+    # 중복 제거된 보호자들에게만 알림 전송
+    for guardian_id, g in unique_guardians.items():
+        n = NotificationLog(
+            user_id=guardian_id,
+            notification_type="parent_request",
+            title=f"{u.full_name or u.username}님의 새로운 요청",
+            message=req.content
+        )
+        db.add(n)
+        print(f"[DEBUG] 알림 생성 완료: user_id={guardian_id}")
     record_user_activity(db, u, "request_create")
     db.commit()
     return success_response(data=ParentRequestResponse.model_validate(db_req).dict())
@@ -51,6 +63,21 @@ def toggle_req(rid: int, u: User = Depends(get_current_user), db: Session = Depe
     r = db.query(ParentRequest).filter(ParentRequest.id == rid).first()
     if not r: raise HTTPException(404, "항목 없음")
     r.is_completed = not r.is_completed
+    
+    # 요청 완료 시 관련 알림을 읽음 처리
+    if r.is_completed:
+        # 해당 요청과 관련된 알림 찾기
+        notifications = db.query(NotificationLog).filter(
+            NotificationLog.user_id == u.id,
+            NotificationLog.notification_type == "parent_request",
+            NotificationLog.message == r.content,
+            NotificationLog.is_read == False
+        ).all()
+        
+        # 모든 관련 알림을 읽음 처리
+        for noti in notifications:
+            noti.is_read = True
+    
     record_user_activity(db, u, f"request_toggle_{rid}")
     db.commit(); return success_response(data=ParentRequestResponse.model_validate(r).dict())
 

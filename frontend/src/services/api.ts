@@ -258,6 +258,15 @@ export const medicineAPI = {
 
   toggleAlarm: (id: number) =>
     api.patch(`/api/medicine/alarms/${id}/toggle`),
+
+  postponeAlarm: (id: number, minutes: number) =>
+    api.post(`/api/medicine/alarms/${id}/postpone`, { minutes }),
+
+  skipAlarm: (id: number, time: string, reason: string, reason_detail?: string) =>
+    api.post(`/api/medicine/alarms/${id}/skip`, { time, reason, reason_detail }),
+
+  getSkipLogs: (date?: string, userId?: number) =>
+    api.get('/api/medicine/skip-logs', { params: { skip_date: date, user_id: userId } }),
 }
 
 // 알림 로그 API
@@ -343,6 +352,52 @@ export const inactivityAPI = {
   // 알림 횟수 증가
   incrementReminder: (targetUserId: number) =>
     api.patch(`/api/inactivity/reminder/increment/${targetUserId}`),
+}
+
+// 비상 알림 API
+export const emergencyAPI = {
+  // 긴급 알림 전송
+  sendAlert: () =>
+    api.post('/api/guardians/emergency/alert'),
+  
+  // 긴급 연락처 조회
+  getContacts: () =>
+    api.get('/api/guardians/emergency/contacts'),
+}
+
+// 건강 기록 API
+export const healthAPI = {
+  // 건강 기록 추가
+  createRecord: (data: {
+    record_type: string
+    systolic?: number
+    diastolic?: number
+    glucose?: number
+    weight?: number
+    measured_at?: string
+    notes?: string
+  }) => api.post('/api/health/records', data),
+
+  // 건강 기록 조회
+  getRecords: (params?: {
+    record_type?: string
+    user_id?: number
+    start_date?: string
+    end_date?: string
+    limit?: number
+  }) => api.get('/api/health/records', { params }),
+
+  // 최신 건강 기록
+  getLatestRecord: (record_type: string, user_id?: number) =>
+    api.get('/api/health/records/latest', { params: { record_type, user_id } }),
+
+  // 건강 통계
+  getStats: (record_type: string, days?: number, user_id?: number) =>
+    api.get('/api/health/stats', { params: { record_type, days, user_id } }),
+
+  // 건강 기록 삭제
+  deleteRecord: (id: number) =>
+    api.delete(`/api/health/records/${id}`),
 }
 
 export default api

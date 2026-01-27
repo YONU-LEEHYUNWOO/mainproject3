@@ -56,6 +56,17 @@ const Tasks = () => {
     loadTasks()
   }, [])
 
+  // 알림 설정이 변경되면 재스케줄링
+  useEffect(() => {
+    if (tasks.length > 0 && permission === 'granted' && settings.enabled) {
+      console.log(`⚙️ 알림 설정 변경 감지: ${settings.advanceMinutes}분 전 → 재스케줄링`)
+      const notCompletedTasks = tasks.filter((task: Task) => !task.completed && task.date && task.time)
+      notCompletedTasks.forEach((task: Task) => {
+        scheduleTaskNotification(task)
+      })
+    }
+  }, [settings.advanceMinutes])
+
   const loadTasks = async () => {
     try {
       const response = await tasksAPI.getTasks()
@@ -71,11 +82,12 @@ const Tasks = () => {
 
       // 완료되지 않은 일정에 대해 알림 스케줄링
       if (Array.isArray(safeTasksData)) {
-        safeTasksData
-          .filter((task: Task) => !task.completed && task.date && (task.time || task.time === null))
-          .forEach((task: Task) => {
-            scheduleTaskNotification(task)
-          })
+        const notCompletedTasks = safeTasksData.filter((task: Task) => !task.completed && task.date && task.time)
+        console.log(`📋 일정 로드 완료: 총 ${safeTasksData.length}개, 알림 스케줄링 대상: ${notCompletedTasks.length}개`)
+        
+        notCompletedTasks.forEach((task: Task) => {
+          scheduleTaskNotification(task)
+        })
       }
     } catch (error) {
       console.error('일정 로드 오류:', error)
@@ -188,8 +200,15 @@ const Tasks = () => {
         console.log('✅ 일정 수정 성공')
       } else {
         // 생성 모드
-        await tasksAPI.createTask(taskData)
+        const response = await tasksAPI.createTask(taskData)
         console.log('✅ 일정 생성 성공')
+        
+        // 새로 생성된 일정에 대해 즉시 알림 스케줄링
+        if (taskData.date && taskData.time && !taskData.completed) {
+          const newTask = response.data.data?.task || response.data.task || { ...taskData, id: Date.now() }
+          console.log('🔔 새 일정 알림 스케줄링:', newTask)
+          scheduleTaskNotification(newTask)
+        }
       }
 
       await loadTasks() // 목록 새로고침
@@ -327,15 +346,46 @@ const Tasks = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {filteredTasks.map((task) => (
-                      <TaskItem
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={handleToggleComplete}
-                        onClick={handleTaskClick}
-                      />
-                    ))}
+                  <div className="space-y-4">
+                    {/* 남은 일정 */}
+                    {filteredTasks.filter(t => !t.completed).length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                          남은 일정 ({filteredTasks.filter(t => !t.completed).length})
+                        </h4>
+                        <div className="space-y-2">
+                          {filteredTasks.filter(t => !t.completed).map((task) => (
+                            <TaskItem
+                              key={task.id}
+                              task={task}
+                              onToggleComplete={handleToggleComplete}
+                              onClick={handleTaskClick}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 완료된 일정 */}
+                    {filteredTasks.filter(t => t.completed).length > 0 && (
+                      <div className="pt-3 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-500 mb-2 flex items-center">
+                          <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                          완료된 일정 ({filteredTasks.filter(t => t.completed).length})
+                        </h4>
+                        <div className="space-y-2 opacity-60">
+                          {filteredTasks.filter(t => t.completed).map((task) => (
+                            <TaskItem
+                              key={task.id}
+                              task={task}
+                              onToggleComplete={handleToggleComplete}
+                              onClick={handleTaskClick}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -359,15 +409,46 @@ const Tasks = () => {
                 }}
               />
             ) : (
-              <div className="space-y-3">
-                {filteredTasks.map((task) => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={handleToggleComplete}
-                    onClick={handleTaskClick}
-                  />
-                ))}
+              <div className="space-y-6">
+                {/* 남은 일정 */}
+                {filteredTasks.filter(t => !t.completed).length > 0 && (
+                  <div>
+                    <h4 className="text-base font-bold text-gray-800 mb-3 flex items-center">
+                      <span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+                      📋 남은 일정 ({filteredTasks.filter(t => !t.completed).length})
+                    </h4>
+                    <div className="space-y-3">
+                      {filteredTasks.filter(t => !t.completed).map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onClick={handleTaskClick}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 완료된 일정 */}
+                {filteredTasks.filter(t => t.completed).length > 0 && (
+                  <div className="pt-4 border-t-2 border-gray-200">
+                    <h4 className="text-base font-bold text-gray-500 mb-3 flex items-center">
+                      <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+                      ✅ 완료된 일정 ({filteredTasks.filter(t => t.completed).length})
+                    </h4>
+                    <div className="space-y-3 opacity-60">
+                      {filteredTasks.filter(t => t.completed).map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onClick={handleTaskClick}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -71,13 +71,15 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            AI 케어비서
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <div className="flex justify-center mb-4">
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-4 rounded-2xl shadow-xl">
+              <h2 className="text-4xl font-extrabold">함께잇다</h2>
+            </div>
+          </div>
+          <p className="mt-4 text-center text-base text-gray-600 font-medium">
             {isLogin ? '계정에 로그인하세요' : '새 계정을 만드세요'}
           </p>
         </div>

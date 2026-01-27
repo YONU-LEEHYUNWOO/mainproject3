@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Activity, Heart, Footprints, AlertTriangle, Bell, TrendingUp, TrendingDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Activity, Heart, Footprints, AlertTriangle, Bell, TrendingUp, TrendingDown, Droplet, Scale } from 'lucide-react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { healthAPI, guardiansAPI } from '../services/api'
 
 /**
  * Monitoring 페이지
@@ -8,6 +9,45 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
  */
 const Monitoring = () => {
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily')
+  const [parentUserId, setParentUserId] = useState<number | null>(null)
+  const [healthStats, setHealthStats] = useState<any>({
+    blood_pressure: null,
+    glucose: null,
+    weight: null
+  })
+
+  // 부모 사용자 ID 가져오기 및 건강 기록 로드
+  useEffect(() => {
+    const loadParentHealthData = async () => {
+      try {
+        const managedRes = await guardiansAPI.getManagedUsers()
+        const parentUser = managedRes.data.data?.managed_users?.[0]
+        if (!parentUser) return
+        
+        const userId = parentUser.user_id || parentUser.id
+        setParentUserId(userId)
+
+        // 각 건강 기록 통계 가져오기
+        const [bpRes, glucoseRes, weightRes] = await Promise.all([
+          healthAPI.getStats('blood_pressure', 30, userId).catch(() => null),
+          healthAPI.getStats('glucose', 30, userId).catch(() => null),
+          healthAPI.getStats('weight', 30, userId).catch(() => null)
+        ])
+
+        setHealthStats({
+          blood_pressure: bpRes?.data?.data || null,
+          glucose: glucoseRes?.data?.data || null,
+          weight: weightRes?.data?.data || null
+        })
+      } catch (error) {
+        console.error('건강 데이터 로드 실패:', error)
+      }
+    }
+
+    loadParentHealthData()
+    const interval = setInterval(loadParentHealthData, 300000) // 5분마다 갱신
+    return () => clearInterval(interval)
+  }, [])
 
   // 샘플 데이터 (API 연동 전)
   const dailyData = [
@@ -49,16 +89,6 @@ const Monitoring = () => {
   // 이상 징후 감지 (샘플)
   const hasAnomaly = false
   const anomalies: string[] = []
-
-  /**
-   * 비상 알림 전송
-   */
-  const handleEmergencyAlert = () => {
-    if (window.confirm('비상 알림을 전송하시겠습니까?')) {
-      // TODO: API로 비상 알림 전송
-      alert('비상 알림이 전송되었습니다.')
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -144,13 +174,6 @@ const Monitoring = () => {
                   <li key={index} className="text-sm text-red-700">• {anomaly}</li>
                 ))}
               </ul>
-              <button
-                onClick={handleEmergencyAlert}
-                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2"
-              >
-                <Bell className="h-4 w-4" />
-                <span>비상 알림 전송</span>
-              </button>
             </div>
           </div>
         </div>
@@ -228,9 +251,96 @@ const Monitoring = () => {
         </ResponsiveContainer>
       </div>
 
+      {/* 건강 기록 카드 (혈압, 혈당, 체중) */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">부모님 건강 기록</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* 혈압 */}
+          <div className="border-2 border-red-200 bg-red-50 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <Heart className="h-5 w-5 text-red-600" />
+              <h3 className="text-sm font-semibold text-red-900">혈압</h3>
+            </div>
+            {healthStats.blood_pressure?.latest_record ? (
+              <>
+                <p className="text-3xl font-bold text-red-900">
+                  {healthStats.blood_pressure.latest_record.systolic}/{healthStats.blood_pressure.latest_record.diastolic}
+                </p>
+                <p className="text-xs text-red-700 mt-1">mmHg</p>
+                <div className="mt-3 pt-3 border-t border-red-200">
+                  <p className="text-xs text-gray-600">
+                    평균: {healthStats.blood_pressure.avg_systolic?.toFixed(0)}/{healthStats.blood_pressure.avg_diastolic?.toFixed(0)} mmHg
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(healthStats.blood_pressure.latest_record.measured_at).toLocaleDateString('ko-KR')}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">기록 없음</p>
+            )}
+          </div>
+
+          {/* 혈당 */}
+          <div className="border-2 border-blue-200 bg-blue-50 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <Droplet className="h-5 w-5 text-blue-600" />
+              <h3 className="text-sm font-semibold text-blue-900">혈당</h3>
+            </div>
+            {healthStats.glucose?.latest_record ? (
+              <>
+                <p className="text-3xl font-bold text-blue-900">
+                  {healthStats.glucose.latest_record.glucose}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">mg/dL</p>
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <p className="text-xs text-gray-600">
+                    평균: {healthStats.glucose.avg_glucose?.toFixed(0)} mg/dL
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(healthStats.glucose.latest_record.measured_at).toLocaleDateString('ko-KR')}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">기록 없음</p>
+            )}
+          </div>
+
+          {/* 체중 */}
+          <div className="border-2 border-green-200 bg-green-50 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <Scale className="h-5 w-5 text-green-600" />
+              <h3 className="text-sm font-semibold text-green-900">체중</h3>
+            </div>
+            {healthStats.weight?.latest_record ? (
+              <>
+                <p className="text-3xl font-bold text-green-900">
+                  {healthStats.weight.latest_record.weight}
+                </p>
+                <p className="text-xs text-green-700 mt-1">kg</p>
+                <div className="mt-3 pt-3 border-t border-green-200">
+                  <p className="text-xs text-gray-600">
+                    평균: {healthStats.weight.avg_weight?.toFixed(1)} kg
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(healthStats.weight.latest_record.measured_at).toLocaleDateString('ko-KR')}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">기록 없음</p>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-4">
+          💡 부모님께서 직접 기록하신 건강 정보입니다. (최근 30일 기준)
+        </p>
+      </div>
+
       {/* 건강 데이터 요약 */}
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">건강 데이터 요약</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">활동 데이터 요약</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="border rounded-lg p-4">
             <h3 className="text-sm font-medium text-gray-600 mb-2">평균 심박수</h3>
@@ -244,28 +354,10 @@ const Monitoring = () => {
           </div>
         </div>
         <p className="text-xs text-gray-500 mt-4">
-          * 실제 데이터는 API 연동 후 표시됩니다.
+          * 활동 데이터는 API 연동 후 표시됩니다.
         </p>
       </div>
 
-      {/* 비상 알림 버튼 (항상 표시) */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-medium text-gray-900">비상 상황</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              긴급한 상황이 발생했을 때 비상 알림을 전송할 수 있습니다.
-            </p>
-          </div>
-          <button
-            onClick={handleEmergencyAlert}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 font-medium"
-          >
-            <Bell className="h-5 w-5" />
-            <span>비상 알림</span>
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

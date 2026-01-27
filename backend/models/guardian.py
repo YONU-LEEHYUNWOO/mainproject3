@@ -3,7 +3,7 @@
 사용자의 보호자 정보를 관리합니다.
 """
 
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship as sa_relationship
 from .base import BaseModel
 
@@ -12,6 +12,11 @@ from datetime import datetime
 class Guardian(BaseModel):
     """보호자 모델"""
     __tablename__ = "guardians"
+    
+    # 중복 방지: 같은 (user_id, guardian_user_id) 조합은 1개만 허용
+    __table_args__ = (
+        UniqueConstraint('user_id', 'guardian_user_id', name='unique_guardian_relationship'),
+    )
 
     name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)

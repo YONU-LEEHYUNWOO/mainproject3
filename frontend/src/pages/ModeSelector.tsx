@@ -39,11 +39,14 @@ const ModeSelector = () => {
     <Container maxWidth="md" sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <Box sx={{ textAlign: 'center', width: '100%' }}>
         {/* 헤더 */}
-        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 2, fontWeight: 'bold' }}>
-          🤖 AI 케어비서
+        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 2, fontWeight: 'bold', color: '#1976d2' }}>
+          🤝 함께잇다
         </Typography>
-        <Typography variant="h6" color="text.secondary" gutterBottom sx={{ mb: 4 }}>
-          사용자 유형을 선택해주세요
+        <Typography variant="h6" color="text.secondary" gutterBottom sx={{ mb: 1 }}>
+          부모님과 자녀가 함께 이어지는 든든한 연결고리
+        </Typography>
+        <Typography variant="body1" color="text.secondary" gutterBottom sx={{ mb: 4 }}>
+          어떤 모드로 시작하시겠어요?
         </Typography>
 
         {/* 모드 선택 카드들 */}
@@ -58,28 +61,29 @@ const ModeSelector = () => {
               transition: 'all 0.3s ease',
               '&:hover': {
                 transform: 'translateY(-5px)',
-                boxShadow: 3,
+                boxShadow: 6,
               }
             }}
             onClick={() => setSelectedMode('parent')}
           >
             <CardContent sx={{ textAlign: 'center', p: 4 }}>
-              <ParentIcon sx={{ fontSize: 60, color: '#1976d2', mb: 2 }} />
-              <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                👴 부모 모드
+              <ParentIcon sx={{ fontSize: 70, color: '#1976d2', mb: 2 }} />
+              <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                👴 시니어 모드
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                AI가 도와주는 일상 케어 서비스
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                편안하고 쉬운 일상 도우미
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                • 일정 확인 및 이동 지원<br/>
-                • 약 복용 알림<br/>
-                • AI 추천 및 안전 관리
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                • 📅 일정과 약 복용 알림<br/>
+                • 🗺️ 길찾기와 위치 공유<br/>
+                • ❤️ 건강 기록과 관리<br/>
+                • 🛒 필요한 것 요청하기
               </Typography>
             </CardContent>
           </Card>
 
-          {/* 자식 모드 카드 */}
+          {/* 보호 모드 카드 */}
           <Card
             sx={{
               minWidth: 300,
@@ -89,23 +93,24 @@ const ModeSelector = () => {
               transition: 'all 0.3s ease',
               '&:hover': {
                 transform: 'translateY(-5px)',
-                boxShadow: 3,
+                boxShadow: 6,
               }
             }}
             onClick={() => setSelectedMode('child')}
           >
             <CardContent sx={{ textAlign: 'center', p: 4 }}>
-              <ChildIcon sx={{ fontSize: 60, color: '#2e7d32', mb: 2 }} />
-              <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                👨 자식 모드
+              <ChildIcon sx={{ fontSize: 70, color: '#2e7d32', mb: 2 }} />
+              <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                👨 보호 모드
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                부모님을 관리하는 서비스
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                부모님을 든든하게 챙기는 연결
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                • 부모님 일정 등록<br/>
-                • 실시간 위치 모니터링<br/>
-                • 활동 리포트 및 알림
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                • 📊 부모님 일정 등록/관리<br/>
+                • 📍 실시간 위치 확인<br/>
+                • 💊 약 복용 모니터링<br/>
+                • 🔔 활동 알림과 리포트
               </Typography>
             </CardContent>
           </Card>
@@ -115,33 +120,37 @@ const ModeSelector = () => {
         {selectedMode && (
           <Box sx={{ mt: 4 }}>
             <Typography variant="body1" gutterBottom sx={{ mb: 2 }}>
-              선택하신 모드: <strong>{selectedMode === 'parent' ? '부모 모드' : '자식 모드'}</strong>
+              선택하신 모드: <strong>{selectedMode === 'parent' ? '👴 시니어 모드' : '👨 보호 모드'}</strong>
             </Typography>
             <Button
               variant="contained"
               size="large"
               onClick={handleConfirmMode}
               sx={{
-                px: 6,
-                py: 1.5,
-                fontSize: '1.1rem',
+                px: 8,
+                py: 2,
+                fontSize: '1.2rem',
+                fontWeight: 'bold',
+                borderRadius: 3,
                 backgroundColor: selectedMode === 'parent' ? '#1976d2' : '#2e7d32',
                 '&:hover': {
                   backgroundColor: selectedMode === 'parent' ? '#1565c0' : '#1b5e20',
-                }
+                  transform: 'scale(1.05)',
+                },
+                transition: 'all 0.3s ease'
               }}
             >
-              시작하기
+              🚀 함께 시작하기
             </Button>
           </Box>
         )}
 
         {/* 안내 문구 */}
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 4, maxWidth: 600, mx: 'auto' }}>
-          💡 모드는 언제든지 설정에서 변경할 수 있습니다.
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 4, maxWidth: 600, mx: 'auto', lineHeight: 1.8 }}>
+          💡 모드는 언제든지 변경할 수 있어요. 부모님과 자녀 모두 편하게 사용해보세요!
           {user && (
-            <span style={{ display: 'block', marginTop: 8 }}>
-              환영합니다, <strong>{user.username}</strong>님!
+            <span style={{ display: 'block', marginTop: 12, fontSize: '1rem', color: '#1976d2' }}>
+              🎉 <strong>{user.full_name || user.username}</strong>님, 환영합니다!
             </span>
           )}
         </Typography>

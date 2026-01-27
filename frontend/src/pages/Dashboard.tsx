@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { favoritesAPI, tasksAPI, medicineAPI, guardiansAPI, inactivityAPI } from '../services/api'
+import { favoritesAPI, tasksAPI, medicineAPI, guardiansAPI, inactivityAPI, emergencyAPI } from '../services/api'
 import {
   Calendar,
   MessageSquare,
@@ -17,7 +17,8 @@ import {
   Plus,
   TrendingUp,
   Mic,
-  AlertCircle
+  AlertCircle,
+  Bell
 } from 'lucide-react'
 import { AICareCenter } from '../components/AICareCenter'
 import { CareReport } from '../components/CareReport'
@@ -259,6 +260,46 @@ const Dashboard = () => {
         )
       }
 
+      {/* 비상 알림 버튼 (부모 모드 전용) */}
+      {
+        mode === 'parent' && (
+          <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl shadow-2xl p-6 text-white border-4 border-red-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="bg-white p-4 rounded-full shadow-lg animate-pulse">
+                  <Bell className="h-10 w-10 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-extrabold">긴급 상황 시 도움 요청</h3>
+                  <p className="text-red-100 mt-1 text-base">
+                    위급한 상황이 발생하면 보호자에게 즉시 알림이 전송됩니다
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (window.confirm('보호자에게 긴급 알림을 전송하시겠습니까?')) {
+                    try {
+                      const response = await emergencyAPI.sendAlert()
+                      const sentCount = response.data.data?.sent_count || 0
+                      alert(`긴급 알림이 ${sentCount}명의 보호자에게 전송되었습니다! 보호자가 곧 연락드릴 것입니다.`)
+                    } catch (error: any) {
+                      console.error('긴급 알림 전송 오류:', error)
+                      const errorMsg = error.response?.data?.message || error.response?.data?.detail || '긴급 알림 전송에 실패했습니다.'
+                      alert(errorMsg)
+                    }
+                  }
+                }}
+                className="btn-press-effect px-8 py-5 bg-white text-red-600 rounded-2xl font-bold text-xl hover:bg-red-50 shadow-2xl transform hover:scale-110 transition-all flex items-center space-x-3 border-4 border-white"
+              >
+                <Bell className="h-7 w-7" />
+                <span>도움 요청</span>
+              </button>
+            </div>
+          </div>
+        )
+      }
+
       {/* 환영 메시지 - 모드별로 다른 메시지 */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
@@ -444,34 +485,6 @@ const Dashboard = () => {
           subtitle="무엇이든 물어보세요"
         />
       </div>
-
-      {/* 긴급 알림 */}
-      {
-        stats.dueMedicines.length > 0 && (
-          <div className="bg-red-50 border-l-4 border-red-400 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <AlertTriangle className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">
-                  약 복용 알림
-                </h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <ul className="list-disc pl-5 space-y-1">
-                    {stats.dueMedicines.slice(0, 3).map((medicine: any, index: number) => (
-                      <li key={index}>
-                        {medicine.medicine_name} - {medicine.scheduled_time} 예정
-                        ({medicine.minutes_until}분 남음)
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      }
 
       {/* 빠른 액션 */}
       <div className="bg-white shadow rounded-lg">

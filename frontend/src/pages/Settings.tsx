@@ -23,6 +23,11 @@ const Settings = () => {
   const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [advanceMinutes, setAdvanceMinutes] = useState(notiSettings.advanceMinutes)
 
+  // notiSettings가 변경될 때 advanceMinutes 동기화
+  useEffect(() => {
+    setAdvanceMinutes(notiSettings.advanceMinutes)
+  }, [notiSettings.advanceMinutes])
+
   // 접근성 설정 (Context)
   const {
     fontSize, setFontSize,
@@ -164,15 +169,31 @@ const Settings = () => {
     }
   }
 
-  const handleToggleNotifications = () => {
-    if (permission !== 'granted') {
-      setShowPermissionModal(true)
+  const handleToggleNotifications = async () => {
+    if (permission === 'granted') {
+      // 권한이 있으면 토글
+      const newEnabled = !notiSettings.enabled
+      console.log(`🔔 알림 ${newEnabled ? '활성화' : '비활성화'}`)
+      saveNotiSettings({ enabled: newEnabled })
+    } else if (permission === 'default') {
+      // 권한이 default면 바로 권한 요청
+      console.log('⚠️ 알림 권한 요청 중...')
+      const granted = await requestPermission()
+      if (granted) {
+        console.log('✅ 알림 권한 허용됨!')
+        saveNotiSettings({ enabled: true })
+      } else {
+        console.log('❌ 알림 권한 거부됨')
+      }
     } else {
-      saveNotiSettings({ enabled: !notiSettings.enabled })
+      // 권한이 denied면 모달 표시 (브라우저 설정 안내)
+      console.log('⚠️ 알림 권한이 거부됨 - 브라우저 설정 필요')
+      setShowPermissionModal(true)
     }
   }
 
   const handleAdvanceMinutesChange = (minutes: number) => {
+    console.log(`⏰ 일정 알림 시간 변경: ${minutes}분 전`)
     setAdvanceMinutes(minutes)
     saveNotiSettings({ advanceMinutes: minutes })
   }
@@ -224,12 +245,12 @@ const Settings = () => {
                     key={option.value}
                     onClick={() => setFontSize(option.value as any)}
                     className={`py-3 px-4 rounded-lg border-2 text-center transition-all ${fontSize === option.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
                       }`}
                   >
                     <span className={`${option.value === 'normal' ? 'text-base' :
-                        option.value === 'large' ? 'text-lg' : 'text-xl'
+                      option.value === 'large' ? 'text-lg' : 'text-xl'
                       }`}>
                       {option.label}
                     </span>
@@ -379,12 +400,53 @@ const Settings = () => {
             {/* 권한 상태 안내 */}
             {permission !== 'granted' && (
               <div className={`border-t pt-6 ${permission === 'denied' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
-                } rounded-lg p-4`}>
-                <p className={`text-sm ${permission === 'denied' ? 'text-red-700' : 'text-yellow-700'
-                  }`}>
-                  {permission === 'denied'
-                    ? '알림 권한이 거부되었습니다. 브라우저 설정에서 알림 권한을 허용해주세요.'
-                    : '알림을 받으려면 권한을 허용해주세요.'}
+                } rounded-lg p-6 space-y-4`}>
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className={`h-6 w-6 flex-shrink-0 ${permission === 'denied' ? 'text-red-600' : 'text-yellow-600'}`} />
+                  <div className="flex-1">
+                    <p className={`text-base font-semibold mb-2 ${permission === 'denied' ? 'text-red-900' : 'text-yellow-900'
+                      }`}>
+                      {permission === 'denied'
+                        ? '⚠️ 알림 권한이 거부되었습니다'
+                        : '📢 알림 권한이 필요합니다'}
+                    </p>
+                    <p className={`text-sm ${permission === 'denied' ? 'text-red-700' : 'text-yellow-700'
+                      }`}>
+                      {permission === 'denied'
+                        ? '일정 알림을 받으려면 브라우저 설정에서 알림 권한을 허용해주세요.'
+                        : '일정 시작 전에 알림을 받으려면 권한을 허용해주세요.'}
+                    </p>
+                    {permission === 'default' && (
+                      <button
+                        onClick={handleRequestPermission}
+                        className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm"
+                      >
+                        알림 권한 허용하기
+                      </button>
+                    )}
+                    {permission === 'denied' && (
+                      <div className="mt-3 p-3 bg-white rounded border border-red-300">
+                        <p className="text-xs text-gray-700 font-medium mb-1">브라우저 설정 방법:</p>
+                        <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                          <li>주소창 왼쪽의 자물쇠 아이콘 클릭</li>
+                          <li>'알림' 항목을 '허용'으로 변경</li>
+                          <li>페이지 새로고침</li>
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 디버그 정보 (개발 모드에서만 표시) */}
+            {import.meta.env.DEV && (
+              <div className="border-t pt-6 bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-mono text-gray-600">
+                  [디버그] 알림 권한: {permission} | 알림 활성화: {notiSettings.enabled ? 'ON' : 'OFF'} | 알림 시간: {advanceMinutes}분 전
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 일정을 등록한 후 브라우저 콘솔(F12)에서 "일정 알림 스케줄링" 로그를 확인하세요.
                 </p>
               </div>
             )}

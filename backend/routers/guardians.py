@@ -294,6 +294,63 @@ async def get_emergency_contacts(
         "total": len(emergency_guardians)
     }
 
+@router.post("/emergency/alert")
+async def send_emergency_alert(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    긴급 알림 전송
+    모든 보호자에게 긴급 알림을 전송합니다.
+    """
+    from models.notification_log import NotificationLog
+    from datetime import datetime
+    
+    # 현재 사용자의 모든 보호자 조회
+    guardians = db.query(Guardian).filter(
+        Guardian.user_id == current_user.id,
+        Guardian.notification_enabled == True
+    ).all()
+    
+    if not guardians:
+        raise HTTPException(
+            status_code=404,
+            detail="알림을 받을 보호자가 없습니다"
+        )
+    
+    # 중복 제거 (guardian_user_id 기준)
+    unique_guardians = {}
+    for g in guardians:
+        if g.guardian_user_id and g.guardian_user_id not in unique_guardians:
+            unique_guardians[g.guardian_user_id] = g
+    
+    # 각 보호자에게 긴급 알림 생성
+    sent_count = 0
+    for guardian_id, g in unique_guardians.items():
+        notification = NotificationLog(
+            user_id=guardian_id,
+            notification_type="emergency_alert",
+            title=f"🚨 {current_user.full_name or current_user.username}님의 긴급 알림",
+            message=f"{current_user.full_name or current_user.username}님이 긴급 도움을 요청했습니다. 즉시 연락 바랍니다."
+        )
+        db.add(notification)
+        sent_count += 1
+    
+    # 활동 기록
+    from utils.activity import record_user_activity
+    record_user_activity(db, current_user, "emergency_alert_sent")
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"{sent_count}명의 보호자에게 긴급 알림을 전송했습니다",
+        "data": {
+            "sent_count": sent_count,
+            "timestamp": datetime.now().isoformat()
+        }
+    }
+
 @router.get("/by-relationship/{relationship}")
 async def get_guardians_by_relationship(
     relationship: str,

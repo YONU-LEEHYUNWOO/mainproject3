@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { notificationLogsAPI } from '../services/api'
 
 export interface NotificationSettings {
   enabled: boolean
   advanceMinutes: number // 알림 시간 (분)
 }
+
+// 스케줄된 알림 타이머를 저장 (task ID -> timeout ID)
+const scheduledTimers: Map<string, NodeJS.Timeout> = new Map()
 
 export const useNotifications = () => {
   const [permission, setPermission] = useState<NotificationPermission>('default')
@@ -76,28 +79,71 @@ export const useNotifications = () => {
 
   // 일정 알림 스케줄링
   const scheduleTaskNotification = useCallback((task: any) => {
-    if (!settings.enabled || permission !== 'granted') {
+    console.log('=== 일정 알림 스케줄링 시작 ===')
+    console.log('설정 enabled:', settings.enabled)
+    console.log('권한:', permission)
+    console.log('일정:', task)
+
+    if (!settings.enabled) {
+      console.log('❌ 알림이 비활성화되어 스케줄링 중단')
       return
     }
 
-    const taskDateTime = new Date(`${task.date}T${task.time || '09:00'}`)
-    const notificationTime = new Date(taskDateTime.getTime() - (settings.advanceMinutes * 60 * 1000))
+    if (permission !== 'granted') {
+      console.log('❌ 브라우저 알림 권한이 없어 스케줄링 중단 (현재 권한:', permission + ')')
+      return
+    }
+
+    if (!task.date || !task.time) {
+      console.log('❌ 일정에 날짜나 시간이 없어 스케줄링 중단')
+      return
+    }
+
+    const taskDateTime = new Date(`${task.date}T${task.time}`)
+    // task.reminder_minutes가 양수면 사용, 아니면 settings.advanceMinutes 사용
+    // (0이면 설정값 사용, 값이 있으면 해당 값 사용)
+    const reminderMinutes = (task.reminder_minutes && task.reminder_minutes > 0) 
+        ? task.reminder_minutes 
+        : settings.advanceMinutes
+    const notificationTime = new Date(taskDateTime.getTime() - (reminderMinutes * 60 * 1000))
 
     const now = new Date()
     const delay = notificationTime.getTime() - now.getTime()
 
+    console.log(`📅 [일정: ${task.title}]`)
+    console.log(`  - 일정 시간: ${taskDateTime.toLocaleString('ko-KR')}`)
+    console.log(`  - 알림 시간: ${notificationTime.toLocaleString('ko-KR')} (${reminderMinutes}분 전)`)
+    console.log(`  - 현재 시간: ${now.toLocaleString('ko-KR')}`)
+    console.log(`  - 대기 시간: ${Math.floor(delay/1000)}초 (${Math.floor(delay/60000)}분)`)
+
     if (delay > 0) {
-      setTimeout(() => {
+      const timerKey = `task-${task.id}`
+      
+      // 기존 타이머가 있으면 취소
+      if (scheduledTimers.has(timerKey)) {
+        clearTimeout(scheduledTimers.get(timerKey))
+        console.log(`🔄 기존 알림 취소 후 재스케줄링`)
+      }
+      
+      const timeoutId = setTimeout(() => {
+        console.log(`🔔 [알림 실행] ${task.title}`)
         showNotification(
-          `일정 알림: ${task.title}`,
+          `📅 일정 알림: ${task.title}`,
           {
-            body: `${task.time || '시간 미정'}에 예정된 일정이 있습니다.`,
-            tag: `task-${task.id}`,
-            requireInteraction: false
+            body: `${task.time}에 예정된 일정이 있습니다.`,
+            tag: timerKey,
+            requireInteraction: true
           }
         )
+        scheduledTimers.delete(timerKey)
       }, delay)
+      
+      scheduledTimers.set(timerKey, timeoutId)
+      console.log(`✅ ${Math.floor(delay/1000)}초 후 알림 예약 완료! (ID: ${timerKey})`)
+    } else {
+      console.log(`❌ 알림 시간이 이미 지나서 스케줄링하지 않음 (${Math.floor(delay/60000)}분 전)`)
     }
+    console.log('=== 일정 알림 스케줄링 종료 ===\n')
   }, [settings, permission, showNotification])
 
   // 약 알림 스케줄링
@@ -126,16 +172,23 @@ export const useNotifications = () => {
   useEffect(() => {
     if ('Notification' in window) {
       setPermission(Notification.permission)
+      console.log('🔔 브라우저 알림 권한:', Notification.permission)
+    } else {
+      console.warn('⚠️ 이 브라우저는 알림을 지원하지 않습니다.')
     }
 
     // 저장된 설정 불러오기
     const savedSettings = localStorage.getItem('notification_settings')
     if (savedSettings) {
       try {
-        setSettings(JSON.parse(savedSettings))
+        const parsed = JSON.parse(savedSettings)
+        setSettings(parsed)
+        console.log('📥 저장된 알림 설정 로드:', parsed)
       } catch (error) {
-        console.error('알림 설정 로드 실패:', error)
+        console.error('❌ 알림 설정 로드 실패:', error)
       }
+    } else {
+      console.log('📝 기본 알림 설정 사용:', settings)
     }
   }, [])
 
@@ -144,7 +197,17 @@ export const useNotifications = () => {
     const updatedSettings = { ...settings, ...newSettings }
     setSettings(updatedSettings)
     localStorage.setItem('notification_settings', JSON.stringify(updatedSettings))
+    console.log('💾 알림 설정 저장:', updatedSettings)
   }, [settings])
+
+  // 모든 예약된 알림 취소
+  const cancelAllScheduledNotifications = useCallback(() => {
+    console.log(`🗑️ 모든 예약된 알림 취소: ${scheduledTimers.size}개`)
+    scheduledTimers.forEach((timeoutId, key) => {
+      clearTimeout(timeoutId)
+    })
+    scheduledTimers.clear()
+  }, [])
 
   return {
     permission,
@@ -153,6 +216,7 @@ export const useNotifications = () => {
     showNotification,
     scheduleTaskNotification,
     scheduleMedicineNotification,
-    saveSettings
+    saveSettings,
+    cancelAllScheduledNotifications
   }
 }

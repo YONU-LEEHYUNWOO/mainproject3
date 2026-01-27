@@ -6,16 +6,19 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from datetime import datetime, date
+from datetime import datetime, date, time, timedelta
 from database import get_db
 from auth import get_current_user
 from models.user import User
 from models.medicine_alarm import MedicineAlarm
 from models.guardian import Guardian
+from models.medicine_skip_log import MedicineSkipLog
+from models.notification_log import NotificationLog
 from schemas.medicine_alarm import (
     MedicineAlarmCreate, MedicineAlarmUpdate, MedicineAlarmResponse,
     MedicineAlarmListResponse, MedicineTakenRequest
 )
+from schemas.medicine_skip import MedicinePostponeRequest, MedicineSkipRequest
 from utils.activity import record_user_activity
 from utils.response import success_response
 from utils.medicine_helpers import sync_medicine_tasks, update_stock_and_notify
@@ -258,6 +261,11 @@ async def get_today_medicine_alarms(
 
     today_alarms = []
     for alarm in alarms:
+        # 날짜가 바뀌었으면 복용 기록 초기화 (재고는 유지)
+        if alarm.last_taken and alarm.last_taken.date() != today:
+            alarm.daily_taken_times = ""
+            db.commit()
+        
         times = alarm.get_times()
         if times:  # 복용 시간이 설정된 경우만
             # time_1, time_2, time_3, time_4 추출
@@ -276,11 +284,12 @@ async def get_today_medicine_alarms(
                 "time_4": time_list[3] if len(time_list) > 3 else None,
                 "last_taken": alarm.last_taken.isoformat() if alarm.last_taken else None,
                 "next_reminder": alarm.next_reminder.isoformat() if alarm.next_reminder else None,
-                "next_reminder": alarm.next_reminder.isoformat() if alarm.next_reminder else None,
                 "daily_taken_times": alarm.daily_taken_times,
                 # 모든 시간이 완료되었는지 확인
                 "is_taken": all(t in (alarm.daily_taken_times.split(",") if alarm.daily_taken_times else []) for t in [t.strftime("%H:%M") for t in times if t]),
-                "is_active": alarm.is_active
+                "is_active": alarm.is_active,
+                "current_stock": alarm.current_stock,
+                "reorder_threshold": alarm.reorder_threshold
             })
     
     # time_1 기준으로 정렬
@@ -380,4 +389,136 @@ async def toggle_medicine_alarm(
     return success_response(
         data=MedicineAlarmResponse.model_validate(alarm).dict(),
         message="약 알림이 활성화되었습니다" if alarm.is_active else "약 알림이 비활성화되었습니다"
+    )
+
+@router.post("/alarms/{alarm_id}/postpone")
+async def postpone_medicine(
+    alarm_id: int,
+    request: MedicinePostponeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """약 복용 미루기"""
+    alarm = db.query(MedicineAlarm).filter(
+        MedicineAlarm.id == alarm_id,
+        MedicineAlarm.user_id == current_user.id
+    ).first()
+    
+    if not alarm:
+        raise HTTPException(status_code=404, detail="약 알림을 찾을 수 없습니다")
+    
+    # 미루기 시간 설정
+    now = datetime.now()
+    postponed_time = now + timedelta(minutes=request.minutes)
+    alarm.postponed_until = postponed_time
+    alarm.next_reminder = postponed_time
+    
+    db.commit()
+    
+    return success_response(
+        data={"next_reminder": postponed_time.isoformat()},
+        message=f"{request.minutes}분 후로 미뤘습니다"
+    )
+
+@router.post("/alarms/{alarm_id}/skip")
+async def skip_medicine(
+    alarm_id: int,
+    request: MedicineSkipRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """약 복용 건너뛰기"""
+    alarm = db.query(MedicineAlarm).filter(
+        MedicineAlarm.id == alarm_id,
+        MedicineAlarm.user_id == current_user.id
+    ).first()
+    
+    if not alarm:
+        raise HTTPException(status_code=404, detail="약 알림을 찾을 수 없습니다")
+    
+    # 건너뛰기 로그 생성
+    today = date.today()
+    skip_time_obj = datetime.strptime(request.time, "%H:%M").time()
+    
+    skip_log = MedicineSkipLog(
+        medicine_alarm_id=alarm_id,
+        user_id=current_user.id,
+        skip_date=today,
+        skip_time=skip_time_obj,
+        reason=request.reason,
+        reason_detail=request.reason_detail
+    )
+    db.add(skip_log)
+    
+    # 보호자들에게 알림 전송 (중복 제거)
+    guardians = db.query(Guardian).filter(Guardian.user_id == current_user.id).all()
+    unique_guardians = {}
+    for g in guardians:
+        if g.guardian_user_id and g.guardian_user_id not in unique_guardians:
+            unique_guardians[g.guardian_user_id] = g
+    
+    # 사유 한글 변환
+    reason_display = skip_log.get_reason_display()
+    detail_text = f" ({request.reason_detail})" if request.reason_detail else ""
+    
+    for guardian_id in unique_guardians.keys():
+        notification = NotificationLog(
+            user_id=guardian_id,
+            notification_type="medicine_skipped",
+            title=f"{current_user.full_name or current_user.username}님이 약을 건너뛰셨습니다",
+            message=f"{alarm.medicine_name} ({request.time}) - {reason_display}{detail_text}"
+        )
+        db.add(notification)
+    
+    db.commit()
+    
+    return success_response(
+        data={"skip_log_id": skip_log.id},
+        message="건너뛰기가 기록되었습니다"
+    )
+
+@router.get("/skip-logs")
+async def get_skip_logs(
+    skip_date: Optional[date] = None,
+    user_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """약 건너뛰기 이력 조회 (보호자 권한 지원)"""
+    target_id = user_id or current_user.id
+    
+    # 권한 확인
+    if user_id and user_id != current_user.id:
+        guardian = db.query(Guardian).filter(
+            Guardian.user_id == user_id,
+            Guardian.guardian_user_id == current_user.id
+        ).first()
+        if not guardian:
+            raise HTTPException(status_code=403, detail="권한이 없습니다")
+    
+    query = db.query(MedicineSkipLog).filter(MedicineSkipLog.user_id == target_id)
+    
+    if skip_date:
+        query = query.filter(MedicineSkipLog.skip_date == skip_date)
+    else:
+        query = query.filter(MedicineSkipLog.skip_date == date.today())
+    
+    logs = query.all()
+    
+    # 약 이름 포함하여 반환
+    result = []
+    for log in logs:
+        alarm = db.query(MedicineAlarm).filter(MedicineAlarm.id == log.medicine_alarm_id).first()
+        result.append({
+            "id": log.id,
+            "medicine_name": alarm.medicine_name if alarm else "알 수 없음",
+            "skip_time": log.skip_time.strftime("%H:%M"),
+            "reason": log.get_reason_display(),
+            "reason_detail": log.reason_detail,
+            "skip_date": log.skip_date.isoformat()
+        })
+    
+    return success_response(
+        data={"skip_logs": result, "total": len(result)},
+        message="성공"
     )

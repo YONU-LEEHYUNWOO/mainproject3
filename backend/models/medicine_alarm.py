@@ -43,6 +43,7 @@ class MedicineAlarm(BaseModel):
     # 복용 상태
     last_taken: datetime = Column(DateTime, nullable=True)
     next_reminder: datetime = Column(DateTime, nullable=True)
+    postponed_until: datetime = Column(DateTime, nullable=True)  # 미루기 시간
     # 오늘 복용한 시간 목록 (콤마로 구분, 예: "08:00,12:00")
     # 매일 자정 또는 첫 조회 시 리셋 필요
     daily_taken_times: str = Column(String(500), default="", nullable=True)

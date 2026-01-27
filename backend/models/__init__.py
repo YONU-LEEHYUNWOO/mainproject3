@@ -17,6 +17,8 @@ from .favorite_place import FavoritePlace
 from .inactivity import InactivitySettings, InactivityLog
 from .parent_request import ParentRequest
 from .frequent_item import FrequentItem
+from .medicine_skip_log import MedicineSkipLog
+from .health_record import HealthRecord
 
 # 모든 모델을 __all__에 명시
 __all__ = [
@@ -32,5 +34,7 @@ __all__ = [
     "NotificationLog",
     "FavoritePlace",
     "InactivitySettings",
-    "InactivityLog"
+    "InactivityLog",
+    "MedicineSkipLog",
+    "HealthRecord"
 ]

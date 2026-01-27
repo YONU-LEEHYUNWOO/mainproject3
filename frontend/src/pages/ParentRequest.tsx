@@ -7,7 +7,13 @@ import { FrequentModal as Modal } from './FrequentModal'
 
 const ParentRequest = () => {
     const [t, setT] = useState(''), [l, setL] = useState<any[]>([]), [e, setE] = useState<any>(null), [m, setM] = useState(false)
-    const ld = () => api.getList().then(res => setL(res.data.data))
+    // 완료되지 않은 항목만 필터링하여 표시
+    const ld = () => api.getList().then(res => {
+        const items = res.data.data || []
+        // 부모모드에서는 완료된 항목 제외
+        const activeItems = items.filter((item: any) => !item.is_completed)
+        setL(activeItems)
+    })
     useEffect(() => { ld() }, [])
     const sv = async (v?: string) => { const txt = v || t; if (!txt) return; e ? await api.upd(e.id, txt) : await api.create(txt); setT(''); setE(null); ld() }
     const fm = async () => {
