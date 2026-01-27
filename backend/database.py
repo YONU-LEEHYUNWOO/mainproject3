@@ -211,10 +211,15 @@ def ensure_schema():
                     print("[DB-CHECK] medicine_alarms 테이블에 favorite_pharmacy_id 컬럼 추가 중...")
                     conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN favorite_pharmacy_id INTEGER"))
 
+                if 'morning' not in columns:
                     print("[DB-CHECK] medicine_alarms 테이블에 시간대 컬럼(morning/lunch/evening) 추가 중...")
                     conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN morning BOOLEAN DEFAULT 0"))
                     conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN lunch BOOLEAN DEFAULT 0"))
                     conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN evening BOOLEAN DEFAULT 0"))
+                
+                if 'postponed_until' not in columns:
+                    print("[DB-CHECK] medicine_alarms 테이블에 postponed_until 컬럼 추가 중...")
+                    conn.execute(text("ALTER TABLE medicine_alarms ADD COLUMN postponed_until DATETIME"))
 
         # 7. tasks 테이블 확인 (medicine_alarm_id)
         if 'tasks' in tables:
