@@ -38,6 +38,7 @@ class User(BaseModel):
     medicines = relationship("Medicine", back_populates="owner", lazy="select")
     medicine_alarms = relationship("MedicineAlarm", back_populates="user", lazy="select")
     notification_logs = relationship("NotificationLog", back_populates="user", lazy="select")
+    weather_records = relationship("WeatherRecord", back_populates="user", lazy="select")
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation as useRouteLocation, useSearchParams } from 'react-router-dom'
-import { MapPin, Navigation, Loader2, Search, Star, Clock, X, AlertTriangle } from 'lucide-react'
+import { MapPin, Navigation, Loader2, Search, Star, Clock, X, AlertTriangle, Mic, MicOff } from 'lucide-react'
 import { KakaoMap } from '../components/KakaoMap'
 import { useLocation } from '../hooks/useLocation'
 import { useGuardianLocation } from '../hooks/useGuardianLocation'
 import { useFavorites } from '../hooks/useFavorites'
 import { tasksAPI } from '../services/api'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 
 declare global {
   interface Window {
@@ -63,6 +64,32 @@ const Location = () => {
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [activeTab, setActiveTab] = useState<'favorites' | 'search'>('favorites')
+
+  // 음성 인식
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported: sttSupported } = useSpeechRecognition()
+
+  // 음성 인식 결과 처리 (실시간)
+  useEffect(() => {
+    if (transcript && isListening) {
+      setKeyword(transcript)
+    }
+  }, [transcript, isListening])
+
+  // 음성 인식 종료 시 검색 트리거
+  useEffect(() => {
+    if (!isListening && transcript) {
+      performSearch(transcript)
+      resetTranscript()
+    }
+  }, [isListening, transcript, resetTranscript])
+
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
 
   const initialSearchPerformed = useRef(false)
 
@@ -424,22 +451,54 @@ const Location = () => {
         <div className="p-4">
           {activeTab === 'search' && (
             <div className="space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">장소 검색</span>
+                {sttSupported && (
+                  <button
+                    type="button"
+                    onClick={handleVoiceToggle}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening
+                      ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                      }`}
+                    title={isListening ? '음성 인식 중지' : '음성으로 입력'}
+                  >
+                    {isListening ? (
+                      <>
+                        <MicOff size={14} />
+                        <span>중지</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic size={14} />
+                        <span>음성 입력</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
               <form onSubmit={handleSearch} className="relative">
                 <input
                   type="text"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   placeholder="장소, 주소 검색 (예: 약국, 병원)"
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  className={`w-full pl-10 pr-16 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all ${isListening
+                    ? 'border-red-500 ring-2 ring-red-200 bg-red-50'
+                    : 'border-gray-300'
+                    }`}
                 />
                 <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1.5 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition"
-                  disabled={isSearching}
-                >
-                  검색
-                </button>
+                <div className="absolute right-2 top-1.5 flex gap-1">
+                  {/* 구형 STT 버튼 제거됨 (상단 타원형 버튼으로 대체) */}
+                  <button
+                    type="submit"
+                    className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition"
+                    disabled={isSearching}
+                  >
+                    검색
+                  </button>
+                </div>
               </form>
 
               <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">

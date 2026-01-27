@@ -359,7 +359,7 @@ export const emergencyAPI = {
   // 긴급 알림 전송
   sendAlert: () =>
     api.post('/api/guardians/emergency/alert'),
-  
+
   // 긴급 연락처 조회
   getContacts: () =>
     api.get('/api/guardians/emergency/contacts'),
@@ -398,6 +398,21 @@ export const healthAPI = {
   // 건강 기록 삭제
   deleteRecord: (id: number) =>
     api.delete(`/api/health/records/${id}`),
+}
+
+// 날씨 정보 API
+export const weatherAPI = {
+  // 기상청 API로부터 날씨 정보 가져오기 (백엔드 프록시)
+  fetchFromKma: (params: {
+    nx: number
+    ny: number
+    base_date: string
+    base_time: string
+  }) => api.post('/api/weather/fetch-kma', params),
+
+  // 최신 날씨 정보 조회
+  getLatest: () =>
+    api.get('/api/weather/latest'),
 }
 
 export default api

@@ -171,7 +171,7 @@ async def simple_login(request: Request):
 try:
     from models import (
         Base, User, Task, ChatMessage, AIConversation, 
-        Guardian, Medicine, MedicineAlarm, NotificationLog, ParentRequest
+        Guardian, Medicine, MedicineAlarm, NotificationLog, ParentRequest, WeatherRecord
     )
     from models.inactivity import InactivitySettings, InactivityLog
     from database import engine, create_tables
@@ -432,6 +432,14 @@ try:
         print("건강 기록 라우터 등록 완료: /api/health")
     except Exception as e:
         print(f"health 라우터 등록 오류: {e}")
+
+    # 날씨 정보 라우터 등록
+    try:
+        import routers.weather as weather
+        app.include_router(weather.router, prefix="/api/weather", tags=["날씨정보"])
+        print("날씨 정보 라우터 등록 완료: /api/weather")
+    except Exception as e:
+        print(f"weather 라우터 등록 오류: {e}")
 
     print("\n라우터 등록 프로세스 완료!")
 

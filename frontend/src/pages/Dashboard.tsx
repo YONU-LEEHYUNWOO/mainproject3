@@ -24,7 +24,7 @@ import { AICareCenter } from '../components/AICareCenter'
 import { CareReport } from '../components/CareReport'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
-import { VoiceInputButton } from '../components/VoiceInputButton'
+import { WeatherWidget } from '../components/WeatherWidget'
 
 interface FavoritePlace {
   id: number
@@ -222,61 +222,68 @@ const Dashboard = () => {
       {/* 실시간 알림 센터 (공통 노출) */}
       <NotificationCenter targetUserId={mode === 'child' ? (managedUserId || undefined) : undefined} />
 
-      {/* AI 보이스 비서 위젯 (부모 모드 전용) */}
+      {/* 부모 모드 전용: AI 말로 관리하기 + 날씨 위젯 */}
       {
         mode === 'parent' && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-6 border-2 border-blue-200 group hover:shadow-xl transition-all">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h3 className="font-bold text-gray-800 text-xl mb-1">AI 말로 관리하기</h3>
-                <p className="text-sm text-gray-600 mb-4">"내일 병원 일정 추가해줘"라고 말해보세요</p>
-                
-                {/* 큰 음성 인식 버튼 */}
-                {isSpeechSupported ? (
-                  <button
-                    onClick={() => isListening ? stopListening() : startListening()}
-                    className={`flex items-center space-x-3 px-6 py-4 rounded-xl font-semibold text-base transition-all transform hover:scale-105 ${
-                      isListening
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* AI 보이스 비서 위젯 */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-6 border-2 border-blue-200 group hover:shadow-xl transition-all">
+              <div className="flex flex-col h-full justify-between">
+                <div>
+                  <h3 className="font-bold text-gray-800 text-xl mb-1">AI 말로 관리하기</h3>
+                  <p className="text-sm text-gray-600 mb-4">"내일 병원 일정 추가해줘"라고 말해보세요</p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  {/* 큰 음성 인식 버튼 */}
+                  {isSpeechSupported ? (
+                    <button
+                      onClick={() => isListening ? stopListening() : startListening()}
+                      className={`flex items-center space-x-3 px-6 py-4 rounded-xl font-semibold text-base transition-all transform hover:scale-105 ${isListening
                         ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
                         : 'bg-blue-500 text-white shadow-md hover:bg-blue-600 hover:shadow-lg'
-                    }`}
+                        }`}
+                    >
+                      {isListening ? (
+                        <>
+                          <div className="relative">
+                            <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75"></div>
+                            <Mic className="h-6 w-6 relative z-10" />
+                          </div>
+                          <span>인식 중... 중지</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="h-6 w-6" />
+                          <span>말하기</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-gray-500">지원하지 않는 브라우저</p>
+                  )}
+
+                  {/* 채팅 버튼 */}
+                  <Link
+                    to="/parent/chat"
+                    className="p-4 bg-white text-gray-400 rounded-xl hover:bg-blue-50 hover:text-blue-500 transition-colors shadow-sm border border-gray-200"
+                    title="채팅하기"
                   >
-                    {isListening ? (
-                      <>
-                        <div className="relative">
-                          <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75"></div>
-                          <Mic className="h-6 w-6 relative z-10" />
-                        </div>
-                        <span>음성 인식 중... 탭하여 중지</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="h-6 w-6" />
-                        <span>음성으로 말하기</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <p className="text-sm text-gray-500">음성 인식을 지원하지 않는 브라우저입니다</p>
+                    <MessageSquare className="h-6 w-6" />
+                  </Link>
+                </div>
+
+                {speechError && (
+                  <div className="mt-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center shadow-sm border border-red-200">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    {speechError}
+                  </div>
                 )}
               </div>
-              
-              {/* 채팅 버튼 */}
-              <Link
-                to="/parent/chat"
-                className="ml-4 p-4 bg-white text-gray-400 rounded-xl hover:bg-blue-50 hover:text-blue-500 transition-colors shadow-sm border border-gray-200"
-                title="채팅하기"
-              >
-                <MessageSquare className="h-6 w-6" />
-              </Link>
             </div>
 
-            {speechError && (
-              <div className="mt-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center shadow-sm border border-red-200">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                {speechError}
-              </div>
-            )}
+            {/* 날씨 위젯 */}
+            <WeatherWidget />
           </div>
         )
       }

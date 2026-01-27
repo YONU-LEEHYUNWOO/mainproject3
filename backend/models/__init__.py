@@ -19,6 +19,7 @@ from .parent_request import ParentRequest
 from .frequent_item import FrequentItem
 from .medicine_skip_log import MedicineSkipLog
 from .health_record import HealthRecord
+from .weather import WeatherRecord
 
 # 모든 모델을 __all__에 명시
 __all__ = [

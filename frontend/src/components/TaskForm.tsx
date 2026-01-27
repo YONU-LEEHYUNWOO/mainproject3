@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Calendar, Clock, MapPin, Flag } from 'lucide-react'
+import { X, Calendar, Clock, MapPin, Flag, Mic, MicOff } from 'lucide-react'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 
 interface TaskFormProps {
   isOpen: boolean
@@ -44,39 +45,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showResults, setShowResults] = useState(false)
   const searchIdRef = useRef(0)
-
-  // 수정 모드일 경우 초기 데이터 로드
-  useEffect(() => {
-    if (isOpen) {
-      if (initialData) {
-        setFormData({
-          title: initialData.title || '',
-          description: initialData.description || '',
-          date: initialData.date ? initialData.date.split('T')[0] : (selectedDate ? formatLocalDate(selectedDate) : ''),
-          time: initialData.time || '',
-          location: initialData.location || '',
-          latitude: initialData.latitude || null,
-          longitude: initialData.longitude || null,
-          priority: initialData.priority || 2,
-          category: initialData.category || '일반'
-        })
-        setLocationQuery(initialData.location || '')
-      } else {
-        setFormData({
-          title: '',
-          description: '',
-          date: selectedDate ? formatLocalDate(selectedDate) : '',
-          time: '',
-          location: '',
-          latitude: null,
-          longitude: null,
-          priority: 2,
-          category: '일반'
-        })
-        setLocationQuery('')
-      }
-    }
-  }, [isOpen, initialData, selectedDate])
 
   // 장소 검색 함수
   const searchPlaces = useCallback((query: string) => {
@@ -130,6 +98,78 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     }
   }, [currentLocation])
 
+  // 음성 인식 상태 (각 필드별)
+  const [activeField, setActiveField] = useState<'title' | 'description' | 'location' | null>(null)
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition()
+
+  // 음성 인식 결과 처리 (실시간)
+  useEffect(() => {
+    if (transcript && activeField) {
+      if (activeField === 'location') {
+        setLocationQuery(transcript)
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          [activeField]: transcript
+        }))
+      }
+    }
+  }, [transcript, activeField])
+
+  // 음성 인식 종료 시 처리
+  useEffect(() => {
+    if (!isListening && activeField) {
+      if (activeField === 'location' && transcript) {
+        searchPlaces(transcript)
+        setShowResults(true)
+      }
+      resetTranscript()
+      setActiveField(null)
+    }
+  }, [isListening, activeField, resetTranscript, searchPlaces, transcript])
+
+  const handleVoiceToggle = (field: 'title' | 'description' | 'location') => {
+    if (isListening && activeField === field) {
+      stopListening()
+    } else {
+      setActiveField(field)
+      startListening()
+    }
+  }
+
+  // 수정 모드일 경우 초기 데이터 로드
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setFormData({
+          title: initialData.title || '',
+          description: initialData.description || '',
+          date: initialData.date ? initialData.date.split('T')[0] : (selectedDate ? formatLocalDate(selectedDate) : ''),
+          time: initialData.time || '',
+          location: initialData.location || '',
+          latitude: initialData.latitude || null,
+          longitude: initialData.longitude || null,
+          priority: initialData.priority || 2,
+          category: initialData.category || '일반'
+        })
+        setLocationQuery(initialData.location || '')
+      } else {
+        setFormData({
+          title: '',
+          description: '',
+          date: selectedDate ? formatLocalDate(selectedDate) : '',
+          time: '',
+          location: '',
+          latitude: null,
+          longitude: null,
+          priority: 2,
+          category: '일반'
+        })
+        setLocationQuery('')
+      }
+    }
+  }, [isOpen, initialData, selectedDate])
+
   // 장소 선택 핸들러
   const handlePlaceSelect = (place: any) => {
     setFormData(prev => ({
@@ -170,6 +210,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   }
 
   const handleClose = () => {
+    // 음성 인식 중지 및 초기화
+    if (isListening) {
+      stopListening()
+    }
+    resetTranscript()
+    setActiveField(null)
+
     setFormData({
       title: '',
       description: '',
@@ -186,6 +233,15 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     setShowResults(false)
     onClose()
   }
+
+  // 컴포넌트 언마운트 시 음성 인식 정리
+  useEffect(() => {
+    return () => {
+      if (isListening) {
+        stopListening()
+      }
+    }
+  }, [isListening, stopListening])
 
   if (!isOpen) return null
 
@@ -209,17 +265,46 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* 제목 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              제목 *
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+              <span>제목 *</span>
+              {isSupported && (
+                <button
+                  type="button"
+                  onClick={() => handleVoiceToggle('title')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening && activeField === 'title'
+                    ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                    }`}
+                  title={isListening && activeField === 'title' ? '음성 인식 중지' : '음성으로 입력'}
+                >
+                  {isListening && activeField === 'title' ? (
+                    <>
+                      <MicOff size={14} />
+                      <span>중지</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={14} />
+                      <span>음성 입력</span>
+                    </>
+                  )}
+                </button>
+              )}
             </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="일정 제목을 입력하세요"
-              required
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-all ${isListening && activeField === 'title'
+                  ? 'border-red-500 ring-2 ring-red-200 bg-red-50'
+                  : 'border-gray-300'
+                  }`}
+                placeholder="일정 제목을 입력하세요 (음성 가능)"
+                required
+              />
+              {/* 구형 STT 버튼 제거됨 (레이블의 타원형 버튼으로 대체) */}
+            </div>
           </div>
 
           {/* 날짜와 시간 */}
@@ -253,9 +338,31 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
           {/* 장소 검색 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <MapPin size={14} className="inline mr-1" />
-              장소
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+              <span className="flex items-center"><MapPin size={14} className="mr-1" />장소</span>
+              {isSupported && (
+                <button
+                  type="button"
+                  onClick={() => handleVoiceToggle('location')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening && activeField === 'location'
+                    ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                    }`}
+                  title={isListening && activeField === 'location' ? '음성 인식 중지' : '음성으로 입력'}
+                >
+                  {isListening && activeField === 'location' ? (
+                    <>
+                      <MicOff size={14} />
+                      <span>중지</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={14} />
+                      <span>음성 입력</span>
+                    </>
+                  )}
+                </button>
+              )}
             </label>
             <div className="relative">
               <input
@@ -275,9 +382,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     setShowResults(true)
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-all ${isListening && activeField === 'location'
+                  ? 'border-red-500 ring-2 ring-red-200 bg-red-50'
+                  : 'border-gray-300'
+                  }`}
                 placeholder="장소를 검색하세요 (예: 병원, 약국)"
               />
+              {/* 구형 STT 버튼 제거됨 (레이블의 타원형 버튼으로 대체) */}
 
               {/* 검색 결과 드롭다운 */}
               {showResults && searchResults.length > 0 && (
@@ -333,15 +444,41 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
           {/* 설명 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              설명
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+              <span>설명</span>
+              {isSupported && (
+                <button
+                  type="button"
+                  onClick={() => handleVoiceToggle('description')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening && activeField === 'description'
+                    ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                    }`}
+                  title={isListening && activeField === 'description' ? '음성 인식 중지' : '음성으로 입력'}
+                >
+                  {isListening && activeField === 'description' ? (
+                    <>
+                      <MicOff size={14} />
+                      <span>중지</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={14} />
+                      <span>음성 입력</span>
+                    </>
+                  )}
+                </button>
+              )}
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 resize-none transition-all ${isListening && activeField === 'description'
+                ? 'border-red-500 ring-2 ring-red-200 bg-red-50'
+                : 'border-gray-300'
+                }`}
               rows={3}
-              placeholder="일정에 대한 자세한 설명을 입력하세요"
+              placeholder="일정에 대한 자세한 설명을 입력하세요 (음성 가능)"
             />
           </div>
 

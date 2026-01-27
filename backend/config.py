@@ -39,7 +39,7 @@ KAKAO_REST_API_KEY = config("KAKAO_REST_API_KEY", default="")
 NAVER_MAP_API_KEY = config("NAVER_MAP_API_KEY", default="")
 
 # 날씨 API 설정 (선택)
-KOREA_WEATHER_API_KEY = config("KOREA_WEATHER_API_KEY", default="")
+KOREA_WEATHER_API_KEY = os.getenv("KOREA_WEATHER_API_KEY") or os.getenv("VITE_KOREA_WEATHER_API_KEY") or config("KOREA_WEATHER_API_KEY", default="")
 
 # 서버 설정
 DEBUG = config("DEBUG", default=True, cast=bool)

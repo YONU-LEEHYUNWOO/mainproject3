@@ -39,21 +39,20 @@ export const useSpeechRecognition = () => {
 
       // 인식 결과 이벤트
       recognition.onresult = (event: any) => {
-        let interimTranscript = ''
-        let finalTranscript = ''
+        let fullTranscript = ''
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' '
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            fullTranscript += result[0].transcript + ' '
           } else {
-            interimTranscript += transcript
+            fullTranscript += result[0].transcript
           }
         }
 
         setState(prev => ({
           ...prev,
-          transcript: finalTranscript || interimTranscript
+          transcript: fullTranscript.trim()
         }))
       }
 
@@ -115,13 +114,24 @@ export const useSpeechRecognition = () => {
     }
 
     try {
+      // 이미 실행 중이면 중지 후 다시 시작
+      recognitionRef.current.stop()
+
       setState(prev => ({
         ...prev,
         isListening: true,
         error: null,
         transcript: ''
       }))
-      recognitionRef.current.start()
+
+      // 상태 업데이트 후 약간의 지연을 주어 안전하게 시작
+      setTimeout(() => {
+        try {
+          recognitionRef.current.start()
+        } catch (e) {
+          console.error('Speech start error:', e)
+        }
+      }, 100)
     } catch (error) {
       setState(prev => ({
         ...prev,

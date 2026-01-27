@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Search, MapPin, X, Loader2 } from 'lucide-react'
+import { Search, MapPin, X, Loader2, Mic, MicOff } from 'lucide-react'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 
 interface Place {
     id: string
@@ -32,6 +33,10 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
     const [isLoading, setIsLoading] = useState(false)
     const searchIdRef = useRef(0)
 
+    // 음성 인식
+    const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition()
+
+    // searchPlaces 함수를 먼저 정의
     const searchPlaces = React.useCallback((query: string) => {
         if (!query.trim() || !window.kakao || !window.kakao.maps) return
 
@@ -67,6 +72,29 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
         }, searchOptions)
     }, [currentLocation])
 
+    // 음성 인식 결과를 키워드에 반영
+    useEffect(() => {
+        if (transcript && isListening) {
+            setKeyword(transcript)
+        }
+    }, [transcript, isListening])
+
+    // 음성 인식 종료 시 검색 실행
+    useEffect(() => {
+        if (!isListening && transcript) {
+            searchPlaces(transcript)
+            resetTranscript()
+        }
+    }, [isListening, transcript, resetTranscript, searchPlaces])
+
+    const handleVoiceToggle = () => {
+        if (isListening) {
+            stopListening()
+        } else {
+            startListening()
+        }
+    }
+
     const initialSearchDone = useRef(false)
 
     useEffect(() => {
@@ -98,6 +126,21 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
         searchPlaces(keyword)
     }
 
+    const handleClose = () => {
+        if (isListening) stopListening()
+        resetTranscript()
+        onClose()
+    }
+
+    // 컴포넌트 언마운트 시 음성 인식 정리
+    useEffect(() => {
+        return () => {
+            if (isListening) {
+                stopListening()
+            }
+        }
+    }, [isListening, stopListening])
+
     if (!isOpen) return null
 
     return (
@@ -106,7 +149,7 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
                 {/* Header */}
                 <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
                     <h2 className="text-xl font-bold text-gray-800">장소 선택</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1">
+                    <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 p-1">
                         <X className="h-6 w-6" />
                     </button>
                 </div>
@@ -118,20 +161,35 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
                             type="text"
                             value={keyword}
                             onChange={(e) => setKeyword(e.target.value)}
-                            placeholder="장소나 주소를 입력하세요"
-                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            placeholder="장소나 주소를 입력하세요 (음성 가능)"
+                            className="w-full pl-10 pr-32 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                             autoFocus
                         />
                         <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                        <button
-                            type="submit"
-                            className="absolute right-2 top-2 bg-blue-500 text-white px-4 py-1.5 rounded-md hover:bg-blue-600 transition"
-                        >
-                            검색
-                        </button>
+                        <div className="absolute right-2 top-2 flex gap-2">
+                            {isSupported && (
+                                <button
+                                    type="button"
+                                    onClick={handleVoiceToggle}
+                                    className={`px-3 py-1.5 rounded-md transition ${isListening
+                                            ? 'bg-red-500 text-white animate-pulse'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    title={isListening ? '음성 인식 중지' : '음성으로 검색'}
+                                >
+                                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                                </button>
+                            )}
+                            <button
+                                type="submit"
+                                className="bg-blue-500 text-white px-4 py-1.5 rounded-md hover:bg-blue-600 transition"
+                            >
+                                검색
+                            </button>
+                        </div>
                     </form>
                     <p className="text-xs text-gray-500 mt-2 ml-1">
-                        * 일정을 등록할 정확한 장소를 선택해 주세요.
+                        * 일정을 등록할 정확한 장소를 선택해 주세요. (음성 인식 후 자동 검색)
                     </p>
                 </div>
 
@@ -174,7 +232,7 @@ export const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
                 {/* Footer */}
                 <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="px-4 py-2 text-gray-700 font-medium hover:text-gray-900"
                     >
                         취소

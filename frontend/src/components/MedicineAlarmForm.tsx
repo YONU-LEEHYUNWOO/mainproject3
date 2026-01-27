@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Mic, MicOff } from 'lucide-react'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 
 interface MedicineAlarmFormData {
   medicine_name: string
@@ -56,6 +57,38 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // 음성 인식 상태 (각 필드별)
+  const [activeField, setActiveField] = useState<'medicine_name' | 'dosage' | 'prescription_info' | null>(null)
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition()
+
+  // 음성 인식 결과 처리
+  useEffect(() => {
+    if (transcript && activeField) {
+      setFormData(prev => ({
+        ...prev,
+        [activeField]: transcript
+      }))
+    }
+  }, [transcript, activeField])
+
+  // 음성 인식 종료 시 초기화
+  useEffect(() => {
+    if (!isListening && activeField) {
+      resetTranscript()
+      setActiveField(null)
+    }
+  }, [isListening, activeField, resetTranscript])
+
+  const handleVoiceToggle = (field: 'medicine_name' | 'dosage' | 'prescription_info') => {
+    if (isListening && activeField === field) {
+      stopListening()
+      setActiveField(null)
+    } else {
+      setActiveField(field)
+      startListening()
+    }
+  }
 
   // 초기 데이터 설정
   useEffect(() => {
@@ -134,6 +167,10 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
         end_date: formData.end_date || undefined
       }
       await onSubmit(submitData)
+      // 음성 인식 정리
+      if (isListening) stopListening()
+      resetTranscript()
+      setActiveField(null)
       onClose()
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || '약 알림 저장에 실패했습니다.'
@@ -142,6 +179,23 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
       setIsSubmitting(false)
     }
   }
+
+  const handleClose = () => {
+    // 음성 인식 정리
+    if (isListening) stopListening()
+    resetTranscript()
+    setActiveField(null)
+    onClose()
+  }
+
+  // 컴포넌트 언마운트 시 음성 인식 정리
+  useEffect(() => {
+    return () => {
+      if (isListening) {
+        stopListening()
+      }
+    }
+  }, [isListening, stopListening])
 
   if (!isOpen) return null
 
@@ -155,7 +209,7 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
               {initialData ? '약 알림 수정' : '약 알림 등록'}
             </h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-gray-600"
             >
               <X className="h-6 w-6" />
@@ -166,32 +220,88 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* 약 이름 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                약 이름 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+                <span>약 이름 <span className="text-red-500">*</span></span>
+                {isSupported && (
+                  <button
+                    type="button"
+                    onClick={() => handleVoiceToggle('medicine_name')}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening && activeField === 'medicine_name'
+                        ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                      }`}
+                    title={isListening && activeField === 'medicine_name' ? '음성 인식 중지' : '음성으로 입력'}
+                  >
+                    {isListening && activeField === 'medicine_name' ? (
+                      <>
+                        <MicOff size={14} />
+                        <span>중지</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic size={14} />
+                        <span>음성 입력</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </label>
-              <input
-                type="text"
-                value={formData.medicine_name}
-                onChange={(e) => setFormData({ ...formData, medicine_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="예: 혈압약"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.medicine_name}
+                  onChange={(e) => setFormData({ ...formData, medicine_name: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-all ${isListening && activeField === 'medicine_name'
+                      ? 'border-red-500 ring-2 ring-red-200 bg-red-50'
+                      : 'border-gray-300'
+                    }`}
+                  placeholder="예: 혈압약 (음성 가능)"
+                  required
+                />
+              </div>
             </div>
 
             {/* 복용량 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                복용량 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+                <span>복용량 <span className="text-red-500">*</span></span>
+                {isSupported && (
+                  <button
+                    type="button"
+                    onClick={() => handleVoiceToggle('dosage')}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening && activeField === 'dosage'
+                        ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                      }`}
+                    title={isListening && activeField === 'dosage' ? '음성 인식 중지' : '음성으로 입력'}
+                  >
+                    {isListening && activeField === 'dosage' ? (
+                      <>
+                        <MicOff size={14} />
+                        <span>중지</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic size={14} />
+                        <span>음성 입력</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </label>
-              <input
-                type="text"
-                value={formData.dosage}
-                onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="예: 1정"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.dosage}
+                  onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-all ${isListening && activeField === 'dosage'
+                      ? 'border-red-500 ring-2 ring-red-200 bg-red-50'
+                      : 'border-gray-300'
+                    }`}
+                  placeholder="예: 1정 (음성 가능)"
+                  required
+                />
+              </div>
             </div>
 
             {/* 복용 시간 (최대 4개) */}
@@ -329,13 +439,41 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
 
             {/* 처방전 정보 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">처방전 정보 (텍스트)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+                <span>처방전 정보 (텍스트)</span>
+                {isSupported && (
+                  <button
+                    type="button"
+                    onClick={() => handleVoiceToggle('prescription_info')}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shadow-sm ${isListening && activeField === 'prescription_info'
+                      ? 'bg-red-500 text-white animate-pulse shadow-red-200 ring-2 ring-red-300'
+                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
+                      }`}
+                    title={isListening && activeField === 'prescription_info' ? '음성 인식 중지' : '음성으로 입력'}
+                  >
+                    {isListening && activeField === 'prescription_info' ? (
+                      <>
+                        <MicOff size={14} />
+                        <span>중지</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic size={14} />
+                        <span>음성 입력</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </label>
               <textarea
                 value={formData.prescription_info}
                 onChange={(e) => setFormData({ ...formData, prescription_info: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 transition-all ${isListening && activeField === 'prescription_info'
+                  ? 'border-red-500 ring-4 ring-red-200 bg-red-50'
+                  : 'border-gray-300'
+                  }`}
                 rows={3}
-                placeholder="처방전 내용을 입력하거나 붙여넣으세요."
+                placeholder="처방전 내용을 입력하거나 붙여넣으세요 (음성 가능)."
               />
             </div>
 
@@ -366,7 +504,7 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
             <div className="flex justify-end space-x-3 pt-4">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
               >
                 취소

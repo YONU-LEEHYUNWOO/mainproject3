@@ -231,6 +231,29 @@ def ensure_schema():
                     print("[DB-CHECK] tasks 테이블에 medicine_alarm_id 컬럼 추가 중...")
                     conn.execute(text("ALTER TABLE tasks ADD COLUMN medicine_alarm_id INTEGER"))
         
+        # 8. weather_records 테이블 확인 및 생성
+        if 'weather_records' not in tables:
+            print("[DB-CHECK] weather_records 테이블 생성 중...")
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS weather_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        temp FLOAT,
+                        humidity INTEGER,
+                        sky_status VARCHAR(20),
+                        rain_type VARCHAR(20),
+                        rain_amount VARCHAR(20),
+                        base_date VARCHAR(8),
+                        base_time VARCHAR(4),
+                        nx INTEGER,
+                        ny INTEGER,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """))
+            print("[DB-CHECK] weather_records 테이블 생성 완료")
+        
         print("[DB-CHECK] 모든 스키마 검사 완료")
     except Exception as e:
         print(f"[DB-CHECK] 오류 발생: {e}")
