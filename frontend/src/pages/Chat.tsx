@@ -57,30 +57,11 @@ const Chat = () => {
   } = useSpeechRecognition()
 
   /**
-   * 음성 인식 결과를 입력창에 반영
-   */
-  useEffect(() => {
-    if (transcript && !isListening) {
-      setInputText(transcript)
-      resetTranscript()
-    }
-  }, [transcript, isListening, resetTranscript])
-
-  /**
    * 컴포넌트 마운트 시 위치 정보 갱신
    */
   useEffect(() => {
     refreshLocation()
   }, [])
-
-  /**
-   * 음성 인식 중지 시 자동으로 전송하지 않음 (사용자가 확인 후 전송)
-   */
-  useEffect(() => {
-    if (!isListening && transcript) {
-      // 음성 인식이 끝나면 입력창에만 표시하고, 자동 전송하지 않음
-    }
-  }, [isListening, transcript])
 
   /**
    * 자녀 모드인 경우 관리 대상 사용자(부모님) 정보 로드
@@ -109,17 +90,43 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // location.state 처리 플래그 (중복 방지)
+  const hasProcessedInitialMessage = useRef(false)
+
   /**
    * 홈 화면 등에서 전달된 초기 메시지가 있으면 자동으로 전송
+   * location.state로 받은 메시지가 있으면 transcript는 무시 (중복 방지)
    */
   useEffect(() => {
     const state = location.state as { initialMessage?: string }
-    if (state?.initialMessage && !isLoading && messages.length === 0) {
+    if (state?.initialMessage && !isLoading && messages.length === 0 && !hasProcessedInitialMessage.current) {
+      hasProcessedInitialMessage.current = true
+      // location.state로 받은 메시지가 있으면 transcript 무시하고 reset
+      if (transcript) {
+        resetTranscript()
+      }
       handleSendMessage(state.initialMessage)
       // 처리 후 state 초기화 (새로고침 시 재전송 방지)
       navigate(location.pathname, { replace: true, state: {} })
     }
-  }, [location.state, isLoading, messages.length])
+    
+    // state가 없으면 플래그 리셋
+    if (!state?.initialMessage) {
+      hasProcessedInitialMessage.current = false
+    }
+  }, [location.state, isLoading, messages.length, transcript, resetTranscript, navigate])
+
+  /**
+   * 음성 인식 결과를 입력창에 반영 (location.state로 받은 메시지가 없을 때만)
+   */
+  useEffect(() => {
+    const state = location.state as { initialMessage?: string }
+    // location.state로 받은 메시지가 없고, 아직 처리하지 않았을 때만 transcript 처리
+    if (transcript && !isListening && !state?.initialMessage && !hasProcessedInitialMessage.current) {
+      setInputText(transcript)
+      resetTranscript()
+    }
+  }, [transcript, isListening, resetTranscript, location.state])
 
   /**
    * 메시지 전송 핸들러
@@ -196,39 +203,93 @@ const Chat = () => {
           const taskData = action.task
           if (taskData) {
             console.log('📅 일정 등록 시도:', taskData)
-            try {
-              // 자녀 모드라면 부모님 ID 명시
-              const targetId = mode === 'child' ? (managedUserId || undefined) : undefined
-              console.log('👤 대상 사용자 ID:', targetId)
+            
+            // location이 있으면 카카오 API로 좌표 검색
+            if (taskData.location && window.kakao?.maps?.services) {
+              console.log('🔍 장소 좌표 검색 중:', taskData.location)
+              const ps = new window.kakao.maps.services.Places()
+              
+              ps.keywordSearch(taskData.location, async (data: any[], status: string) => {
+                let finalTaskData = { ...taskData }
+                
+                if (status === window.kakao.maps.services.Status.OK && data.length > 0) {
+                  // 첫 번째 검색 결과의 좌표 사용
+                  const place = data[0]
+                  finalTaskData = {
+                    ...taskData,
+                    location: place.place_name,
+                    latitude: parseFloat(place.y),
+                    longitude: parseFloat(place.x)
+                  }
+                  console.log('📍 좌표 발견:', finalTaskData.latitude, finalTaskData.longitude)
+                } else {
+                  console.log('⚠️ 좌표를 찾을 수 없음, 장소명만 저장')
+                }
+                
+                try {
+                  const targetId = mode === 'child' ? (managedUserId || undefined) : undefined
+                  const createResponse = await tasksAPI.createTask({
+                    ...finalTaskData,
+                    owner_id: targetId
+                  })
 
-              const createResponse = await tasksAPI.createTask({
-                ...taskData,
-                owner_id: targetId
+                  console.log('✅ 일정 등록 성공:', createResponse.data)
+                  const newTaskId = createResponse.data?.data?.id
+                  if (newTaskId) {
+                    setLastCreatedTaskId(newTaskId)
+                  }
+
+                  const locationInfo = finalTaskData.latitude ? `\n📍 장소: ${finalTaskData.location}` : ''
+                  const successMsg: Message = {
+                    id: Date.now() + 2,
+                    text: `✅ 일정이 등록되었습니다: ${taskData.title} (${taskData.date} ${taskData.time || ''})${locationInfo}`,
+                    isUser: false,
+                    timestamp: new Date()
+                  }
+                  setMessages(prev => [...prev, successMsg])
+                } catch (err: any) {
+                  console.error('❌ 일정 추가 실패:', err)
+                  const errorMsg: Message = {
+                    id: Date.now() + 3,
+                    text: `❌ 일정 등록에 실패했습니다: ${err.message || '알 수 없는 오류'}`,
+                    isUser: false,
+                    timestamp: new Date()
+                  }
+                  setMessages(prev => [...prev, errorMsg])
+                }
               })
+            } else {
+              // location이 없으면 그냥 등록
+              try {
+                const targetId = mode === 'child' ? (managedUserId || undefined) : undefined
+                const createResponse = await tasksAPI.createTask({
+                  ...taskData,
+                  owner_id: targetId
+                })
 
-              console.log('✅ 일정 등록 성공:', createResponse.data)
-              const newTaskId = createResponse.data?.data?.id
-              if (newTaskId) {
-                setLastCreatedTaskId(newTaskId)
-                console.log('🆔 최근 생성된 일정 ID 저장:', newTaskId)
-              }
+                console.log('✅ 일정 등록 성공:', createResponse.data)
+                const newTaskId = createResponse.data?.data?.id
+                if (newTaskId) {
+                  setLastCreatedTaskId(newTaskId)
+                }
 
-              const successMsg: Message = {
-                id: Date.now() + 2,
-                text: `✅ 일정이 등록되었습니다: ${taskData.title} (${taskData.date} ${taskData.time || ''})`,
-                isUser: false,
-                timestamp: new Date()
+                const successMsg: Message = {
+                  id: Date.now() + 2,
+                  text: `✅ 일정이 등록되었습니다: ${taskData.title} (${taskData.date} ${taskData.time || ''})`,
+                  isUser: false,
+                  timestamp: new Date()
+                }
+                setMessages(prev => [...prev, successMsg])
+              } catch (err: any) {
+                console.error('❌ 일정 추가 실패:', err)
+                const errorMsg: Message = {
+                  id: Date.now() + 3,
+                  text: `❌ 일정 등록에 실패했습니다: ${err.message || '알 수 없는 오류'}`,
+                  isUser: false,
+                  timestamp: new Date()
+                }
+                setMessages(prev => [...prev, errorMsg])
               }
-              setMessages(prev => [...prev, successMsg])
-            } catch (err: any) {
-              console.error('❌ 일정 추가 실패:', err)
-              const errorMsg: Message = {
-                id: Date.now() + 3,
-                text: `❌ 일정 등록에 실패했습니다: ${err.message || '알 수 없는 오류'}`,
-                isUser: false,
-                timestamp: new Date()
-              }
-              setMessages(prev => [...prev, errorMsg])
             }
           }
         } else if (action.type === 'CALL_GUARDIAN') {

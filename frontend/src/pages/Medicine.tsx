@@ -221,12 +221,23 @@ const Medicine = () => {
   }
 
   /**
+   * 모드에 따라 알람 목록 새로고침
+   */
+  const refreshAlarms = async () => {
+    if (mode === 'parent') {
+      await loadTodayAlarms()
+    } else {
+      await loadAlarms()
+    }
+  }
+
+  /**
    * 약 알림 삭제 핸들러
    */
   const handleDeleteAlarm = async (alarmId: number) => {
     try {
       await medicineAPI.deleteAlarm(alarmId)
-      await loadAlarms()
+      await refreshAlarms()
     } catch (error: any) {
       // 새로운 응답 형식: {status, message, data} 또는 {detail}
       const errorMessage = error.response?.data?.message ||
@@ -244,7 +255,7 @@ const Medicine = () => {
   const handleToggleAlarm = async (alarmId: number) => {
     try {
       await medicineAPI.toggleAlarm(alarmId)
-      await loadAlarms()
+      await refreshAlarms()
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || '약 알림 상태 변경에 실패했습니다.'
       alert(errorMessage)

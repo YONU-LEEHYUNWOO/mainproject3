@@ -126,8 +126,13 @@ export const useLocation = (mode: 'parent' | 'child') => {
                     setCurrentLocation({ latitude, longitude, accuracy: accuracy || 0 })
                     sendLocationToServer(latitude, longitude, accuracy || 0)
                 },
-                (err) => console.error('Tracking update error:', err),
-                { enableHighAccuracy: true, timeout: 10000 }
+                (err) => {
+                    // 타임아웃(code 3)은 흔한 에러이므로 조용히 처리
+                    if (err.code !== 3) {
+                        console.warn('Tracking update error:', err.message)
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
             )
         }, 60000) // 1분 주기
 

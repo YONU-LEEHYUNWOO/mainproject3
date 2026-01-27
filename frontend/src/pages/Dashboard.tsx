@@ -225,25 +225,46 @@ const Dashboard = () => {
       {/* AI 보이스 비서 위젯 (부모 모드 전용) */}
       {
         mode === 'parent' && (
-          <div className="bg-white rounded-2xl shadow-md p-5 border border-blue-100 flex items-center justify-between group hover:shadow-lg transition-all border-b-4 border-blue-500">
-            <div className="flex items-center space-x-4">
-              <div className="bg-blue-500 p-3 rounded-2xl text-white shadow-inner">
-                <Mic className={`h-6 w-6 ${isListening ? 'animate-bounce' : ''}`} />
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-6 border-2 border-blue-200 group hover:shadow-xl transition-all">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-800 text-xl mb-1">AI 말로 관리하기</h3>
+                <p className="text-sm text-gray-600 mb-4">"내일 병원 일정 추가해줘"라고 말해보세요</p>
+                
+                {/* 큰 음성 인식 버튼 */}
+                {isSpeechSupported ? (
+                  <button
+                    onClick={() => isListening ? stopListening() : startListening()}
+                    className={`flex items-center space-x-3 px-6 py-4 rounded-xl font-semibold text-base transition-all transform hover:scale-105 ${
+                      isListening
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
+                        : 'bg-blue-500 text-white shadow-md hover:bg-blue-600 hover:shadow-lg'
+                    }`}
+                  >
+                    {isListening ? (
+                      <>
+                        <div className="relative">
+                          <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75"></div>
+                          <Mic className="h-6 w-6 relative z-10" />
+                        </div>
+                        <span>음성 인식 중... 탭하여 중지</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="h-6 w-6" />
+                        <span>음성으로 말하기</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <p className="text-sm text-gray-500">음성 인식을 지원하지 않는 브라우저입니다</p>
+                )}
               </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg">AI 말로 관리하기</h3>
-                <p className="text-sm text-gray-500">"내일 병원 일정 추가해줘"라고 말해보세요</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <VoiceInputButton
-                isListening={isListening}
-                isSupported={isSpeechSupported}
-                onClick={() => isListening ? stopListening() : startListening()}
-              />
+              
+              {/* 채팅 버튼 */}
               <Link
                 to="/parent/chat"
-                className="p-3 bg-gray-50 text-gray-400 rounded-full hover:bg-gray-100 hover:text-blue-500 transition-colors"
+                className="ml-4 p-4 bg-white text-gray-400 rounded-xl hover:bg-blue-50 hover:text-blue-500 transition-colors shadow-sm border border-gray-200"
                 title="채팅하기"
               >
                 <MessageSquare className="h-6 w-6" />
@@ -251,8 +272,8 @@ const Dashboard = () => {
             </div>
 
             {speechError && (
-              <div className="absolute top-full mt-2 left-0 right-0 bg-red-50 text-red-600 text-xs p-2 rounded-lg flex items-center shadow-sm z-10">
-                <AlertCircle className="h-3 w-3 mr-1" />
+              <div className="mt-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center shadow-sm border border-red-200">
+                <AlertCircle className="h-4 w-4 mr-2" />
                 {speechError}
               </div>
             )}

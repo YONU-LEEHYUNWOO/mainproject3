@@ -60,7 +60,25 @@ export const MedicineAlarmForm: React.FC<MedicineAlarmFormProps> = ({
   // 초기 데이터 설정
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData)
+      // undefined 값을 기본값으로 대체하여 controlled input 유지
+      setFormData({
+        medicine_name: initialData.medicine_name || '',
+        dosage: initialData.dosage || '',
+        time_1: initialData.time_1 || '',
+        time_2: initialData.time_2 || '',
+        time_3: initialData.time_3 || '',
+        time_4: initialData.time_4 || '',
+        start_date: initialData.start_date || new Date().toISOString().split('T')[0],
+        end_date: initialData.end_date || '',
+        reminder_minutes: initialData.reminder_minutes ?? 15,
+        morning: initialData.morning ?? false,
+        lunch: initialData.lunch ?? false,
+        evening: initialData.evening ?? false,
+        current_stock: initialData.current_stock ?? 0,
+        reorder_threshold: initialData.reorder_threshold ?? 5,
+        prescription_info: initialData.prescription_info || '',
+        is_active: initialData.is_active ?? true
+      })
     } else {
       setFormData({
         medicine_name: '',

@@ -115,12 +115,25 @@ async def update_medicine_alarm(
     db: Session = Depends(get_db)
 ):
     """
-    약 알림 수정
+    약 알림 수정 (보호자 권한 지원)
     """
+    # 먼저 본인의 알람인지 확인
     alarm = db.query(MedicineAlarm).filter(
         MedicineAlarm.id == alarm_id,
         MedicineAlarm.user_id == current_user.id
     ).first()
+
+    # 본인 알람이 아니면 보호자 권한 확인
+    if not alarm:
+        alarm = db.query(MedicineAlarm).filter(MedicineAlarm.id == alarm_id).first()
+        if alarm:
+            # 보호자 권한 확인
+            guardian = db.query(Guardian).filter(
+                Guardian.user_id == alarm.user_id,
+                Guardian.guardian_user_id == current_user.id
+            ).first()
+            if not guardian:
+                alarm = None  # 권한 없음
 
     if not alarm:
         raise HTTPException(
@@ -166,12 +179,25 @@ async def delete_medicine_alarm(
     db: Session = Depends(get_db)
 ):
     """
-    약 알림 삭제
+    약 알림 삭제 (보호자 권한 지원)
     """
+    # 먼저 본인의 알람인지 확인
     alarm = db.query(MedicineAlarm).filter(
         MedicineAlarm.id == alarm_id,
         MedicineAlarm.user_id == current_user.id
     ).first()
+
+    # 본인 알람이 아니면 보호자 권한 확인
+    if not alarm:
+        alarm = db.query(MedicineAlarm).filter(MedicineAlarm.id == alarm_id).first()
+        if alarm:
+            # 보호자 권한 확인
+            guardian = db.query(Guardian).filter(
+                Guardian.user_id == alarm.user_id,
+                Guardian.guardian_user_id == current_user.id
+            ).first()
+            if not guardian:
+                alarm = None  # 권한 없음
 
     if not alarm:
         raise HTTPException(

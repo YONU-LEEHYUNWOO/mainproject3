@@ -58,10 +58,25 @@ async def analyze_task_travel(
         if not is_guardian:
             raise HTTPException(status_code=403, detail="일정 분석 권한이 없습니다")
     
-    if not task.latitude or not task.longitude:
+    # 좌표가 없지만 장소명이 있으면 카카오 API로 자동 검색
+    if (not task.latitude or not task.longitude) and task.location:
+        place_info = KakaoService.search_place(task.location)
+        if place_info:
+            # 좌표를 DB에 업데이트
+            task.latitude = place_info["latitude"]
+            task.longitude = place_info["longitude"]
+            db.commit()
+            db.refresh(task)
+            print(f"[Task {task_id}] 좌표 자동 검색 성공: {place_info['latitude']}, {place_info['longitude']}")
+        else:
+            return success_response(
+                data={"guide": f"'{task.location}' 장소의 좌표를 찾을 수 없습니다. 정확한 장소명으로 수정해 주세요.", "departure_time": None},
+                message="좌표 검색 실패"
+            )
+    elif not task.latitude or not task.longitude:
         return success_response(
-            data={"guide": "장소 좌표 정보가 없어 이동 분석을 할 수 없습니다.", "departure_time": None},
-            message="좌표 정보 부족"
+            data={"guide": "장소 정보가 없어 이동 분석을 할 수 없습니다.", "departure_time": None},
+            message="장소 정보 부족"
         )
 
     # 2. 실시간 경로 계산 (카카오 API)

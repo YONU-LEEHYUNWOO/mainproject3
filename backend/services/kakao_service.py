@@ -1,8 +1,56 @@
 import requests
 import json
+from typing import Optional, Dict
 from config import KAKAO_REST_API_KEY
 
 class KakaoService:
+    @staticmethod
+    def search_place(query: str) -> Optional[Dict]:
+        """
+        카카오 로컬 API를 사용하여 장소 검색 후 첫 번째 결과의 좌표 반환
+        
+        Args:
+            query: 검색할 장소명
+            
+        Returns:
+            {"name": str, "latitude": float, "longitude": float, "address": str} 또는 None
+        """
+        if not KAKAO_REST_API_KEY:
+            print("KAKAO_REST_API_KEY is not configured")
+            return None
+            
+        url = "https://dapi.kakao.com/v2/local/search/keyword.json"
+        
+        headers = {
+            "Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"
+        }
+        
+        params = {
+            "query": query,
+            "size": 1  # 첫 번째 결과만
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            documents = data.get("documents", [])
+            
+            if documents:
+                place = documents[0]
+                return {
+                    "name": place.get("place_name"),
+                    "latitude": float(place.get("y")),
+                    "longitude": float(place.get("x")),
+                    "address": place.get("address_name")
+                }
+            return None
+            
+        except Exception as e:
+            print(f"Kakao Place Search Error: {e}")
+            return None
+
     @staticmethod
     def get_route(origin_x: float, origin_y: float, destination_x: float, destination_y: float):
         """
